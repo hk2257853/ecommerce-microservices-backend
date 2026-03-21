@@ -64,3 +64,44 @@ public class GlobalExceptionHandler {
             LocalDateTime timestamp
     ) {}
 }
+
+/*
+Global Exception Handler Notes:
+
+- @RestControllerAdvice:
+  - Applies to all controllers globally
+  - Combines @ControllerAdvice + @ResponseBody
+  - Used for centralized exception handling (no try-catch in controllers)
+
+- @ExceptionHandler:
+  - Handles specific exception types
+  - Maps exception → custom HTTP response
+
+- MethodArgumentNotValidException:
+  - Triggered when @Valid validation fails
+  - Extracts field-level errors using BindingResult
+  - Returns structured validation error response (field → message)
+
+- RuntimeException:
+  - Handles application-level errors (e.g., resource not found)
+  - Can be replaced with custom exceptions for better design
+
+- Exception (generic):
+  - Catch-all fallback handler
+  - Prevents exposing internal errors to client
+  - Returns 500 Internal Server Error
+
+- ErrorResponse:
+  - DTO for consistent error responses
+  - Contains status, message, errors map, timestamp
+
+- Benefits:
+  - Centralized error handling
+  - Cleaner controllers
+  - Consistent API responses
+  - Better client experience
+
+- Notes:
+  - Prefer custom exceptions over generic RuntimeException
+  - Order matters → specific handlers first, generic last
+*/

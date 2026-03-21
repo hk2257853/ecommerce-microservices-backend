@@ -76,7 +76,7 @@ public class OrderService {
     }
     
     private OrderResponse convertToResponse(Order order) {
-        return new OrderResponse(
+        return new OrderResponse( // This is converting the entity to a response DTO
                 order.getId(),
                 order.getOrderNumber(),
                 order.getCustomerName(),
