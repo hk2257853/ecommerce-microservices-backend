@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: ordersservice
+  profiles:
+    active: dev
+  
+  # HikariCP Connection Pool
+  datasource:
+    hikari:
+      connection-timeout: 20000
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  # JPA Configuration (Java Persistence API)
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
+
+server:
+  port: 8080
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:postgresql://localhost:5432/order_management_system
+    username: postgres
+    password: pass
+    driver-class-name: org.postgresql.Driver
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/order_management_system}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:pass}
+    driver-class-name: org.postgresql.Driver

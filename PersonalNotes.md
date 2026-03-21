@@ -18,10 +18,17 @@ Run command:
 
 com.h2database:h2 - in memory db, great for testing
 
+Postgres db setup: 
+- Install postgresql
+- Create database
+- Add application.yml with db credentials
+
 Next steps:
 1. Study the current codebase to understand the structure and functionality. Verify if things like ORM are properly used - done
 2. Add Swagger - done. Really have a lot of trouble due to version conflicts and .gradle cache issues
-3. Attach db
+3. Attach db - done
+* Setup is completed. 
+Now I need a proper project plan
 4. Look like we not taking advantage of libraries we added like lombok  
 5. switch to constructor injection instead of autowired
 6. Design patterns in the current code (make sure we not overdoing)
