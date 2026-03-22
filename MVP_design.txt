@@ -1,0 +1,54 @@
+Currently I have a basic setup with a few sample endpoitns. 
+Let's make this proper now: Goal is to run a simple e-commerce system (MVP)
+Make sure we taking advantage of all the libraries we added like lombok, etc mentioned in build.gradle
+
+1. Useful for dto and entity design. 
+User - address itself is a complex object, but for simplicity, we will just treat it as a string.
+- id, name, email, address
+Product - assume unlimited stock for simplicity
+- id, name, unit_price
+Order
+- id, userId, total_amount, status, created_at
+OrderItem - required for normalisation of Order
+- id, orderId, productId, quantity, unit_price
+
+Relationships:
+Order has User
+Order has many OrderItems
+OrderItem has Product
+
+cardianality:
+User to Order
+One user can place many orders. One order belongs to exactly one user.
+→ User 1 — N Order
+Order to OrderItem
+One order can have many order items. One order item belongs to exactly one order.
+→ Order 1 — N OrderItem
+OrderItem to Product
+One order item refers to exactly one product. One product can appear in many order items (across different orders).
+→ OrderItem N — 1 Product
+
+benifits of defining cardianality: helps in db desing (foreign keys, indexing, etc.), query optimization (joins, etc.) 
+
+3. API endpoints:
+POST /orders
+Request: { userId, items: [ { productId, quantity } ] }
+Response: { orderId, total_amount, status }
+POST /users
+Request: { name, email, address }
+Response: { userId, name, email, address }
+POST /products
+Request: { name, unit_price }
+Response: { productId, name, unit_price }
+GET /products
+Request: none
+Response: [ { productId, name, unit_price } ]
+GET /orders?userId=x
+Request: none
+Response: [ { orderId, total_amount, status, created_at } ]
+GET /orders/{orderId}/items
+Request: none
+Response: [ { productId, quantity, unit_price } ]
+GET /users
+Request: none
+Response: [ { userId, name, email, address } ]
