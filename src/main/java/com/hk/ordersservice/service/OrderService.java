@@ -1,94 +1,96 @@
 package com.hk.ordersservice.service;
 
 import com.hk.ordersservice.dto.OrderCreateRequest;
+import com.hk.ordersservice.dto.OrderItemResponse;
 import com.hk.ordersservice.dto.OrderResponse;
-import com.hk.ordersservice.entity.Order;
-import com.hk.ordersservice.entity.OrderStatus;
-import com.hk.ordersservice.repository.OrderRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.hk.ordersservice.entity.*;
+import com.hk.ordersservice.repository.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Collectors;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class OrderService {
     
-    @Autowired
-    private OrderRepository orderRepository;
-    
-    private final Random random = new Random();
+    private final OrderRepository orderRepository;
+    private final UserRepository userRepository;
+    private final ProductRepository productRepository;
+    private final OrderItemRepository orderItemRepository;
     
     public OrderResponse createOrder(OrderCreateRequest request) {
-        // Calculate total price
-        BigDecimal totalPrice = request.getUnitPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
+        // Validate user exists
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + request.getUserId()));
         
-        // Create order entity
-        Order order = new Order();
-        order.setOrderNumber(generateOrderNumber());
-        order.setCustomerName(request.getCustomerName());
-        order.setCustomerEmail(request.getCustomerEmail());
-        order.setProductName(request.getProductName());
-        order.setQuantity(request.getQuantity());
-        order.setUnitPrice(request.getUnitPrice());
-        order.setTotalPrice(totalPrice);
-        order.setStatus(OrderStatus.PENDING);
-        order.setShippingAddress(request.getShippingAddress());
+        // Create order items and calculate total
+        List<OrderItem> orderItems = request.getItems().stream()
+                .map(itemRequest -> {
+                    Product product = productRepository.findById(itemRequest.getProductId())
+                            .orElseThrow(() -> new RuntimeException("Product not found with ID: " + itemRequest.getProductId()));
+                    
+                    return OrderItem.builder()
+                            .product(product)
+                            .quantity(itemRequest.getQuantity())
+                            .unitPrice(product.getUnitPrice())
+                            .build();
+                })
+                .collect(Collectors.toList());
         
-        // Save order
+        // Calculate total amount
+        BigDecimal totalAmount = orderItems.stream()
+                .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Create order
+        Order order = Order.builder()
+                .user(user)
+                .totalAmount(totalAmount)
+                .status(OrderStatus.PENDING)
+                .orderItems(orderItems)
+                .build();
+        
+        // Set order reference in order items
+        orderItems.forEach(item -> item.setOrder(order));
+        
+        // Save order and order items
         Order savedOrder = orderRepository.save(order);
         
-        // Convert to response DTO
-        return convertToResponse(savedOrder);
+        return OrderResponse.builder()
+                .orderId(savedOrder.getId())
+                .userId(savedOrder.getUser().getId())
+                .totalAmount(savedOrder.getTotalAmount())
+                .status(savedOrder.getStatus().toString())
+                .createdAt(savedOrder.getCreatedAt())
+                .build();
     }
     
-    public OrderResponse getOrderByOrderNumber(String orderNumber) {
-        Order order = orderRepository.findByOrderNumber(orderNumber)
-                .orElseThrow(() -> new RuntimeException("Order not found with order number: " + orderNumber));
-        return convertToResponse(order);
-    }
-    
-    public List<OrderResponse> getOrdersByCustomerEmail(String customerEmail) {
-        List<Order> orders = orderRepository.findByCustomerEmail(customerEmail);
+    public List<OrderResponse> getOrdersByUserId(Long userId) {
+        List<Order> orders = orderRepository.findByUserId(userId);
         return orders.stream()
-                .map(this::convertToResponse)
+                .map(order -> OrderResponse.builder()
+                        .orderId(order.getId())
+                        .userId(order.getUser().getId())
+                        .totalAmount(order.getTotalAmount())
+                        .status(order.getStatus().toString())
+                        .createdAt(order.getCreatedAt())
+                        .build())
                 .collect(Collectors.toList());
     }
     
-    public List<OrderResponse> getOrdersByStatus(OrderStatus status) {
-        List<Order> orders = orderRepository.findByStatus(status);
-        return orders.stream()
-                .map(this::convertToResponse)
+    public List<OrderItemResponse> getOrderItemsByOrderId(Long orderId) {
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+        return orderItems.stream()
+                .map(item -> OrderItemResponse.builder()
+                        .productId(item.getProduct().getId())
+                        .quantity(item.getQuantity())
+                        .unitPrice(item.getUnitPrice())
+                        .build())
                 .collect(Collectors.toList());
-    }
-    
-    private String generateOrderNumber() {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-        String datePart = LocalDateTime.now().format(formatter);
-        int randomPart = 100000 + random.nextInt(900000);
-        return "ORD-" + datePart + "-" + randomPart;
-    }
-    
-    private OrderResponse convertToResponse(Order order) {
-        return new OrderResponse( // This is converting the entity to a response DTO
-                order.getId(),
-                order.getOrderNumber(),
-                order.getCustomerName(),
-                order.getCustomerEmail(),
-                order.getProductName(),
-                order.getQuantity(),
-                order.getUnitPrice(),
-                order.getTotalPrice(),
-                order.getStatus().toString(),
-                order.getShippingAddress(),
-                order.getCreatedAt(),
-                order.getUpdatedAt()
-        );
     }
 }

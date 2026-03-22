@@ -35,7 +35,7 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:postgresql://localhost:5432/order_management_system
+    url: jdbc:postgresql://localhost:5432/ecommerce_system
     username: postgres
     password: pass
     driver-class-name: org.postgresql.Driver
