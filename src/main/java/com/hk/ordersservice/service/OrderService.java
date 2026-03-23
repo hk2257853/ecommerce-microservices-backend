@@ -37,7 +37,14 @@ public class OrderService {
         List<Long> productIds = request.getItems().stream()
                 .map(OrderItemRequest::getProductId) // this is method reference. lambda - item -> item.getProductId() ie for each item get the productId
                 .collect(Collectors.toList());
+                
         List<Product> products = productRepository.findAllById(productIds);
+        
+        // Add this
+        if (products.size() != request.getItems().size()) {
+        throw new ResourceNotFoundException("One or more products not found");
+        }
+
         
         // Create order using factory
         Order order = orderFactory.createOrder(user, request.getItems(), products);
