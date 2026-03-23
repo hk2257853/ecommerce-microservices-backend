@@ -33,7 +33,10 @@ Next steps:
 6. TODO: verify and study the codebase if it's as per the MVP_design.
 damn the output is too good. Done
 7. switch to constructor injection instead of autowired - done
-8. Design patterns in the current code (make sure we not overdoing) - stuff like builder, 
+8. Design patterns in the current code (make sure we not overdoing) - stuff like builder (lombok), factory pattern for create order. TODO: factory part and learn .map(OrderItemRequest::getProductId) - NOTE: gotta practice stream well
+9. logger?
+Enough. Move to next phase! Will build the endpoints as required. also i can do mass entries via sql.
+10. add automated testing... unit test and repository test for now. will add integration test later.
 
 **1. Nouns not verbs**
 `/orders` not `/createOrder` or `/getOrders`

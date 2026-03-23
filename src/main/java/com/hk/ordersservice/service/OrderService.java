@@ -1,15 +1,18 @@
 package com.hk.ordersservice.service;
 
 import com.hk.ordersservice.dto.OrderCreateRequest;
+import com.hk.ordersservice.dto.OrderItemRequest;
 import com.hk.ordersservice.dto.OrderItemResponse;
 import com.hk.ordersservice.dto.OrderResponse;
 import com.hk.ordersservice.entity.*;
+import com.hk.ordersservice.exception.ResourceNotFoundException;
+import com.hk.ordersservice.factory.OrderFactory;
+import com.hk.ordersservice.mapper.OrderMapper;
 import com.hk.ordersservice.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,64 +25,33 @@ public class OrderService {
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderFactory orderFactory;
+    private final OrderMapper orderMapper;
     
     public OrderResponse createOrder(OrderCreateRequest request) {
         // Validate user exists
         User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found with ID: " + request.getUserId()));
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", request.getUserId()));
         
-        // Create order items and calculate total
-        List<OrderItem> orderItems = request.getItems().stream()
-                .map(itemRequest -> {
-                    Product product = productRepository.findById(itemRequest.getProductId())
-                            .orElseThrow(() -> new RuntimeException("Product not found with ID: " + itemRequest.getProductId()));
-                    
-                    return OrderItem.builder()
-                            .product(product)
-                            .quantity(itemRequest.getQuantity())
-                            .unitPrice(product.getUnitPrice())
-                            .build();
-                })
+        // Fetch all products for the order items
+        List<Long> productIds = request.getItems().stream()
+                .map(OrderItemRequest::getProductId) // this is method reference. lambda - item -> item.getProductId() ie for each item get the productId
                 .collect(Collectors.toList());
+        List<Product> products = productRepository.findAllById(productIds);
         
-        // Calculate total amount
-        BigDecimal totalAmount = orderItems.stream()
-                .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        // Create order
-        Order order = Order.builder()
-                .user(user)
-                .totalAmount(totalAmount)
-                .status(OrderStatus.PENDING)
-                .orderItems(orderItems)
-                .build();
-        
-        // Set order reference in order items
-        orderItems.forEach(item -> item.setOrder(order));
+        // Create order using factory
+        Order order = orderFactory.createOrder(user, request.getItems(), products);
         
         // Save order and order items
         Order savedOrder = orderRepository.save(order);
         
-        return OrderResponse.builder()
-                .orderId(savedOrder.getId())
-                .userId(savedOrder.getUser().getId())
-                .totalAmount(savedOrder.getTotalAmount())
-                .status(savedOrder.getStatus().toString())
-                .createdAt(savedOrder.getCreatedAt())
-                .build();
+        return orderMapper.toOrderResponse(savedOrder);
     }
     
     public List<OrderResponse> getOrdersByUserId(Long userId) {
         List<Order> orders = orderRepository.findByUserId(userId);
         return orders.stream()
-                .map(order -> OrderResponse.builder()
-                        .orderId(order.getId())
-                        .userId(order.getUser().getId())
-                        .totalAmount(order.getTotalAmount())
-                        .status(order.getStatus().toString())
-                        .createdAt(order.getCreatedAt())
-                        .build())
+                .map(orderMapper::toOrderResponse)
                 .collect(Collectors.toList());
     }
     

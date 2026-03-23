@@ -3,6 +3,8 @@ package com.hk.ordersservice.service;
 import com.hk.ordersservice.dto.UserCreateRequest;
 import com.hk.ordersservice.dto.UserResponse;
 import com.hk.ordersservice.entity.User;
+import com.hk.ordersservice.exception.DuplicateResourceException;
+import com.hk.ordersservice.mapper.UserMapper;
 import com.hk.ordersservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,10 +17,11 @@ import java.util.stream.Collectors;
 public class UserService {
     
     private final UserRepository userRepository; // don't need to create the object as Spring will do it for us
+    private final UserMapper userMapper;
     
     public UserResponse createUser(UserCreateRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("User with email " + request.getEmail() + " already exists");
+            throw new DuplicateResourceException("User", "email", request.getEmail());
         }
         
         User user = User.builder()
@@ -29,24 +32,12 @@ public class UserService {
         
         User savedUser = userRepository.save(user);
         
-        return UserResponse.builder()
-                .userId(savedUser.getId())
-                .name(savedUser.getName())
-                .email(savedUser.getEmail())
-                .address(savedUser.getAddress())
-                .createdAt(savedUser.getCreatedAt())
-                .build();
+        return userMapper.toUserResponse(savedUser);
     }
     
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
-                .map(user -> UserResponse.builder()
-                        .userId(user.getId())
-                        .name(user.getName())
-                        .email(user.getEmail())
-                        .address(user.getAddress())
-                        .createdAt(user.getCreatedAt())
-                        .build())
+                .map(userMapper::toUserResponse)
                 .collect(Collectors.toList());
     }
 }
