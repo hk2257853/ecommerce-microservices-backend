@@ -35,8 +35,8 @@ damn the output is too good. Done
 7. switch to constructor injection instead of autowired - done
 8. Design patterns in the current code (make sure we not overdoing) - stuff like builder (lombok), factory pattern for create order. TODO: factory part and learn .map(OrderItemRequest::getProductId) - NOTE: gotta practice stream well
 Additionally added response mappers along with not null in response java files (to avoid sending null in response) - reduced code significantly.
-10. add automated testing... unit test and repository test for now. will add integration test later.
-have saved the plan
+10. add automated testing... unit test and repository test for now. 
+Integration test - It tests multiple layers of your app working together end-to-end (HTTP → controller → service → database), as opposed to a unit test which tests a single class in isolation. 
 9. logger?
 Enough. Move to next phase! Will build the endpoints as required. also i can do mass entries via sql.
 
