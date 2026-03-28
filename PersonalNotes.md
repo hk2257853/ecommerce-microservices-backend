@@ -37,6 +37,7 @@ damn the output is too good. Done
 Additionally added response mappers along with not null in response java files (to avoid sending null in response) - reduced code significantly.
 10. add automated testing... unit test and repository test for now. 
 Integration test - It tests multiple layers of your app working together end-to-end (HTTP → controller → service → database), as opposed to a unit test which tests a single class in isolation. 
+NOTE: all this is on h2 not real db.
 9. logger?
 Enough. Move to next phase! Will build the endpoints as required. also i can do mass entries via sql.
 
@@ -218,3 +219,77 @@ Prints every SQL query Hibernate runs to the console. You've been seeing this �
 
 ring.sql.init.mode=never
 Don't run data.sql on startup. You override this to always in application-dev.properties so seed data only loads in dev.
+
+
+Database Indexes
+What it does: Builds a sorted data structure (B-tree by default) so DB finds rows fast without scanning the whole table.
+
+CREATE INDEX idx_order_item_order_id ON order_items(order_id);
+Index needs a name so that we can do stuff like drop it if needed.
+
+Core tradeoff:
+- SELECT gets faster
+- INSERT/UPDATE/DELETE get slower (every write must update the index too)
+- Extra disk space
+
+When to add: column appears in WHERE/ORDER BY/JOIN frequently, large tables, high cardinality columns (email good, status with 3 values questionable)
+When NOT to add: small tables, rarely queried columns, write-heavy tables
+
+Types:
+- B-tree (default) → equality and range queries (=, >, <, BETWEEN)
+- Hash → only equality (=)
+- GIN/GiST → full text search, arrays (PostgreSQL specific)
+
+Composite index: index on multiple columns e.g. (user_id, status). Order matters — (user_id, status) helps WHERE user_id=? AND status=? but not WHERE status=? alone.
+
+Auto-indexed (no action needed):
+- Unique constraints → automatically creates index
+- Foreign keys in PostgreSQL → automatically indexed
+
+Golden rule: don't add indexes preemptively. Use EXPLAIN ANALYZE in PostgreSQL to spot slow sequential scans, then add indexes based on actual performance data. Additionally people might add index when actual slowness is reported.
+
+
+N+1 Query Problem
+Happens when you load a list of entities and then access a lazy-loaded relation in a loop.
+
+Example:
+1 query to fetch all order items → returns 10 items
+Then for each item in a loop → 1 query to fetch its product
+= 1 + 10 = 11 queries instead of 1
+Basically if me doing a db call in a loop, get alert.
+
+1 = the initial query to fetch the list
+N = one query per item in the list
+
+Lazy loading: JPA doesn't load related entities until you access them (default behavior)
+Eager loading: loads everything upfront in one query
+
+How to spot it: enable show-sql=true and count the queries in logs
+
+Fix: JOIN FETCH loads everything in one query
+@Query("SELECT oi FROM OrderItem oi JOIN FETCH oi.product WHERE oi.order.id = :orderId")
+
+Rule: don't fix it preemptively, confirm it's actually happening via SQL logs first.
+
+
+PLAN:
+EXPLAIN ANALYZE - shows how PostgreSQL executes a query and actual performance metrics
+
+Usage:
+EXPLAIN ANALYZE SELECT * FROM products WHERE name LIKE '%phone%';
+
+Key things to look at:
+- Seq Scan → reading every row, no index being used (bad for large tables)
+- Index Scan → using an index to find rows directly (what you want)
+- cost=0.00..25.00 → estimated cost, lower is better (startup cost..total cost)
+- rows=100 → how many rows DB expects to return
+- actual time=0.1..0.5 → real execution time in milliseconds (this is what actually matters)
+
+Workflow:
+1. Query feels slow
+2. Run EXPLAIN ANALYZE on it
+3. See Seq Scan on large table → add an index
+4. Run again → confirm it switched to Index Scan
+5. Check actual time dropped
+
+It's basically what i did in pl sql once.
