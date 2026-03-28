@@ -186,3 +186,35 @@ Here you're not mocking anything. You're testing that your JPA query methods act
 - Repository test — does my **query** return the right data?
 
 That's all there is at a high level. Clear?
+
+
+GET /api/products with pagination, sort and filter
+@PathVariable → /api/products/{id} (part of the URL path)
+@RequestBody → data in the request body (POST/PUT)
+@RequestParam → ?key=value in the URL (query string)
+Good Design decisions: 
+PageResponse DTO - Standardized pagination format, reusable
+ProductFilterDTO - Flexible filtering, easy to extend
+
+Pageable - Spring object carrying page number, page size, sort column, sort direction
+Passed as 2nd arg to repository methods so Spring auto-generates LIMIT/OFFSET/ORDER BY SQL
+
+(:param IS NULL OR ...) JPQL pattern - single query handles optional filters, no need for multiple query methods
+@ModelAttribute - auto binds query params (?name=X&minPrice=10) directly into a DTO object. Less boilerplate than individual @RequestParam fields. Use for GET params, @RequestBody for POST/PUT JSON body.
+
+DataInitializer - seeds 100 fake products into dev database on startup using Faker for realistic data. @Profile("dev") ensures it never runs in production.
+
+About hibernatio options i can add in application.properties:
+spring.jpa.hibernate.ddl-auto=update
+Controls what Hibernate does to your schema on startup:
+
+update — adds new columns/tables if your entities changed, keeps existing data
+create-drop — drops and recreates everything on every restart (what your test uses)
+none — don't touch the schema at all (production)
+validate — just check schema matches entities, throw error if not
+
+spring.jpa.show-sql=true
+Prints every SQL query Hibernate runs to the console. You've been seeing this — all those Hibernate: select...insert... lines in your logs.
+
+ring.sql.init.mode=never
+Don't run data.sql on startup. You override this to always in application-dev.properties so seed data only loads in dev.
