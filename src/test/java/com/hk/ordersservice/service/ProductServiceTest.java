@@ -44,6 +44,7 @@ class ProductServiceTest {
         productCreateRequest = ProductCreateRequest.builder()
                 .name("Test Product")
                 .unitPrice(new BigDecimal("50.00"))
+                .quantity(10)
                 .build();
 
         // Create test product entity
@@ -51,6 +52,7 @@ class ProductServiceTest {
                 .id(1L)
                 .name("Test Product")
                 .unitPrice(new BigDecimal("50.00"))
+                .quantity(10)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -60,6 +62,8 @@ class ProductServiceTest {
                 .productId(1L)
                 .name("Test Product")
                 .unitPrice(new BigDecimal("50.00"))
+                .quantity(10)
+                .inStock(true)
                 .build();
     }
 
@@ -78,6 +82,8 @@ class ProductServiceTest {
         assertEquals(productResponse.getProductId(), result.getProductId());
         assertEquals(productResponse.getName(), result.getName());
         assertEquals(productResponse.getUnitPrice(), result.getUnitPrice());
+        assertEquals(productResponse.getQuantity(), result.getQuantity());
+        assertEquals(productResponse.getInStock(), result.getInStock());
 
         // Verify interactions
         verify(productRepository).existsByName("Test Product");
@@ -93,8 +99,7 @@ class ProductServiceTest {
         // Act & Assert
         DuplicateResourceException exception = assertThrows(
                 DuplicateResourceException.class,
-                () -> productService.createProduct(productCreateRequest)
-        );
+                () -> productService.createProduct(productCreateRequest));
 
         assertTrue(exception.getMessage().contains("Product"));
         assertTrue(exception.getMessage().contains("name"));
@@ -113,6 +118,7 @@ class ProductServiceTest {
                 .id(2L)
                 .name("Test Product 2")
                 .unitPrice(new BigDecimal("75.00"))
+                .quantity(15)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -121,6 +127,8 @@ class ProductServiceTest {
                 .productId(2L)
                 .name("Test Product 2")
                 .unitPrice(new BigDecimal("75.00"))
+                .quantity(15)
+                .inStock(true)
                 .build();
 
         List<Product> products = Arrays.asList(testProduct, testProduct2);
@@ -137,9 +145,13 @@ class ProductServiceTest {
         assertEquals(productResponse.getProductId(), result.get(0).getProductId());
         assertEquals(productResponse.getName(), result.get(0).getName());
         assertEquals(productResponse.getUnitPrice(), result.get(0).getUnitPrice());
+        assertEquals(productResponse.getQuantity(), result.get(0).getQuantity());
+        assertEquals(productResponse.getInStock(), result.get(0).getInStock());
         assertEquals(productResponse2.getProductId(), result.get(1).getProductId());
         assertEquals(productResponse2.getName(), result.get(1).getName());
         assertEquals(productResponse2.getUnitPrice(), result.get(1).getUnitPrice());
+        assertEquals(productResponse2.getQuantity(), result.get(1).getQuantity());
+        assertEquals(productResponse2.getInStock(), result.get(1).getInStock());
 
         // Verify interactions
         verify(productRepository).findAll();
@@ -163,7 +175,6 @@ class ProductServiceTest {
         verify(productRepository).findAll();
         verify(productMapper, never()).toProductResponse(any());
     }
-
 
     @Test
     void testCreateProductWithZeroPrice() {

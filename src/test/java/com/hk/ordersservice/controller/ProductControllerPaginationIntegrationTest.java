@@ -40,6 +40,7 @@ class ProductControllerPaginationIntegrationTest {
             Product product = Product.builder()
                     .name("Product " + i)
                     .unitPrice(new BigDecimal(10 + i))
+                    .quantity((i % 10) + 1) // Quantity between 1-10
                     .build();
             productRepository.save(product);
         }

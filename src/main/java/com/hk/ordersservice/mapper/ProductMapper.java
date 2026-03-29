@@ -6,12 +6,14 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ProductMapper {
-    
+
     public ProductResponse toProductResponse(Product product) {
         return ProductResponse.builder()
                 .productId(product.getId())
                 .name(product.getName())
                 .unitPrice(product.getUnitPrice())
+                .quantity(product.getQuantity())
+                .inStock(product.isInStock())
                 .build();
     }
 }

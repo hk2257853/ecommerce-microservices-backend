@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Random;
 
 @Component
 @Profile("dev")
@@ -18,6 +19,7 @@ import java.math.RoundingMode;
 public class DataInitializer implements ApplicationRunner {
 
     private final ProductRepository productRepository;
+    private final Random random = new Random();
 
     @Override
     public void run(ApplicationArguments args) {
@@ -31,6 +33,7 @@ public class DataInitializer implements ApplicationRunner {
                     .name(faker.commerce().productName())
                     .unitPrice(new BigDecimal(faker.commerce().price())
                             .setScale(2, RoundingMode.HALF_UP))
+                    .quantity(random.nextInt(50) + 1) // Random quantity between 1-50
                     .build();
             productRepository.save(product);
         }

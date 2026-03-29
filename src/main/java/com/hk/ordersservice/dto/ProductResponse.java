@@ -14,8 +14,10 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductResponse {
-    
+
     private Long productId;
     private String name;
     private BigDecimal unitPrice;
+    private Integer quantity;
+    private Boolean inStock;
 }

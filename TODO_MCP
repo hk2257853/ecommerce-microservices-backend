@@ -1,0 +1,6 @@
+Try these for fun:
+Postman MCP — test your API endpoints directly from chat
+PostgreSQL / Database MCP — query your DB directly from chat, inspect tables, run EXPLAIN ANALYZE without switching tools
+GitHub MCP — commit, create PRs, view diffs from chat
+Filesystem MCP — read/write files directly, useful for config changes
+Notion MCP — take notes, track progress, link to code

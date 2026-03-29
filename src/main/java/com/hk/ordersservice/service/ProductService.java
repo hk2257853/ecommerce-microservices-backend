@@ -33,6 +33,7 @@ public class ProductService {
         Product product = Product.builder()
                 .name(request.getName())
                 .unitPrice(request.getUnitPrice())
+                .quantity(request.getQuantity() != null ? request.getQuantity() : 5)
                 .build();
 
         Product savedProduct = productRepository.save(product);

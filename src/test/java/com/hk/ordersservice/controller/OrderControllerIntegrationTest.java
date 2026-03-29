@@ -75,12 +75,14 @@ class OrderControllerIntegrationTest {
                 testProduct1 = Product.builder()
                                 .name("Product 1")
                                 .unitPrice(new BigDecimal("50.00"))
+                                .quantity(10)
                                 .build();
                 testProduct1 = productRepository.save(testProduct1);
 
                 testProduct2 = Product.builder()
                                 .name("Product 2")
                                 .unitPrice(new BigDecimal("75.00"))
+                                .quantity(5)
                                 .build();
                 testProduct2 = productRepository.save(testProduct2);
 
@@ -154,5 +156,11 @@ class OrderControllerIntegrationTest {
                 assertThat(savedOrderItem2.getProduct().getId()).isEqualTo(testProduct2.getId());
                 assertThat(savedOrderItem2.getQuantity()).isEqualTo(1);
                 assertThat(savedOrderItem2.getUnitPrice()).isEqualTo(testProduct2.getUnitPrice());
+
+                // Verify stock was decremented
+                Product updatedProduct1 = productRepository.findById(testProduct1.getId()).orElseThrow();
+                Product updatedProduct2 = productRepository.findById(testProduct2.getId()).orElseThrow();
+                assertThat(updatedProduct1.getQuantity()).isEqualTo(8); // 10 - 2 = 8
+                assertThat(updatedProduct2.getQuantity()).isEqualTo(4); // 5 - 1 = 4
         }
 }
