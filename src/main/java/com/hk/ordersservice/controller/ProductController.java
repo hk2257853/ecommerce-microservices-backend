@@ -2,6 +2,7 @@ package com.hk.ordersservice.controller;
 
 import com.hk.ordersservice.dto.PageResponse;
 import com.hk.ordersservice.dto.ProductCreateRequest;
+import com.hk.ordersservice.dto.ProductUpdateRequest;
 import com.hk.ordersservice.dto.ProductFilterDTO;
 import com.hk.ordersservice.dto.ProductResponse;
 import com.hk.ordersservice.service.ProductService;
@@ -61,5 +62,42 @@ public class ProductController {
         public ResponseEntity<List<ProductResponse>> getAllProductsLegacy() {
                 List<ProductResponse> products = productService.getAllProducts();
                 return ResponseEntity.ok(products);
+        }
+
+        @GetMapping("/{id}")
+        @Operation(summary = "Get product by ID")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Product retrieved successfully"),
+                        @ApiResponse(responseCode = "404", description = "Product not found")
+        })
+        public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
+                ProductResponse product = productService.getProductById(id);
+                return ResponseEntity.ok(product);
+        }
+
+        @PutMapping("/{id}")
+        @Operation(summary = "Update product by ID")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Product updated successfully"),
+                        @ApiResponse(responseCode = "400", description = "Invalid input"),
+                        @ApiResponse(responseCode = "404", description = "Product not found"),
+                        @ApiResponse(responseCode = "409", description = "Product with this name already exists")
+        })
+        public ResponseEntity<ProductResponse> updateProduct(
+                        @PathVariable Long id,
+                        @Valid @RequestBody ProductUpdateRequest request) {
+                ProductResponse product = productService.updateProduct(id, request);
+                return ResponseEntity.ok(product);
+        }
+
+        @DeleteMapping("/{id}")
+        @Operation(summary = "Delete product by ID")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "204", description = "Product deleted successfully"),
+                        @ApiResponse(responseCode = "404", description = "Product not found")
+        })
+        public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
+                productService.deleteProduct(id);
+                return ResponseEntity.noContent().build();
         }
 }

@@ -393,3 +393,61 @@ When used together:
 - Flyway owns all schema changes via migration files
 
 So hibernate is no longer responsible for managing the database schema in my case
+
+
+
+## Redis Caching
+
+### Annotations
+- @EnableCaching — enables caching, goes on config/main class
+- @Cacheable(value = "products", key = "#id") - returns from cache if key exists, else runs method and caches result
+  - value = cache name (logical namespace, e.g. "products")
+  - key = cache key built from method param (e.g. #id → "products::5")
+  - above 2 show up in redis
+  - cachedValue - what's actually stored in redis is the method's return value
+  - Think: HashMap<cacheName, HashMap<key, cachedValue>>
+- @CacheEvict — removes from cache, use on deletes/updates
+- @CachePut — always runs method AND updates cache, use on updates
+- @Caching — combine multiple cache ops on one method
+NOTE: these tags are from spring cache annotation not specific to redis thus i can use them with any cache provider.
+
+### Cache Invalidation Strategies
+- TTL (Time To Live) expiry — cache auto-expires after set time
+- Cache-aside — app checks cache first, on miss hits DB and populates cache (Spring default)
+- Endpoint to manually clear cache
+
+- Write-through — write to DB and cache together, synchronously ie db updates and saved to cache. (@CachePut)
+- Write-behind — write to cache first, return success, then update DB asynchronously in the background. Faster response time but risk of data loss if cache crashes before DB write happens.
+
+### TTL Tradeoffs
+- Too short → too many DB hits
+- Too long → stale data
+- Right TTL depends on how often data changes.
+User profile — changes rarely, TTL of hours is fine
+Stock price — changes every second, TTL of seconds or don't cache at all
+
+### Cache Stampede
+When cache expires and many requests hit DB simultaneously
+Fix: locking (only one request rebuilds cache) or probabilistic early expiry
+Will have to acctually see the end point behavior - if such spikes are often, then can go with locking and all.
+
+### When NOT to cache
+- Frequently changing data
+- User-specific data (watch your cache keys)
+- Financial/transactional data where stale = dangerous
+
+### Mental model
+Cache-aside: check cache → if miss, hit DB → populate cache → evict on writes
+
+# Places to do caching:
+Service
+Not controller (caches before validation)
+Repository - same query gets reused across multiple services
+
+# CacheManager
+- will allow me to access cache in other places like in another service file if needed.
+
+In memory cache vs Redis:
+- In memory cache is faster but only available in the current application instance
+- Redis is slower but available across multiple application instances and can be shared across multiple applications (distributed system, multiple backend instances - inmemory cache will be out of sync)
+- Additionally redis gives extra durability (if backend crashes, cache is not lost)

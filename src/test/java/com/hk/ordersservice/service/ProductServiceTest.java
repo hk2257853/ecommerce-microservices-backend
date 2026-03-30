@@ -2,6 +2,7 @@ package com.hk.ordersservice.service;
 
 import com.hk.ordersservice.dto.ProductCreateRequest;
 import com.hk.ordersservice.dto.ProductResponse;
+import com.hk.ordersservice.dto.ProductUpdateRequest;
 import com.hk.ordersservice.entity.Product;
 import com.hk.ordersservice.exception.DuplicateResourceException;
 import com.hk.ordersservice.mapper.ProductMapper;
@@ -35,6 +36,7 @@ class ProductServiceTest {
     private ProductService productService;
 
     private ProductCreateRequest productCreateRequest;
+    private ProductUpdateRequest productUpdateRequest;
     private Product testProduct;
     private ProductResponse productResponse;
 
@@ -45,6 +47,13 @@ class ProductServiceTest {
                 .name("Test Product")
                 .unitPrice(new BigDecimal("50.00"))
                 .quantity(10)
+                .build();
+
+        // Create test product update request
+        productUpdateRequest = ProductUpdateRequest.builder()
+                .name("Updated Product")
+                .unitPrice(new BigDecimal("75.00"))
+                .quantity(20)
                 .build();
 
         // Create test product entity
@@ -249,5 +258,117 @@ class ProductServiceTest {
         verify(productRepository).existsByName("");
         verify(productRepository).save(any(Product.class));
         verify(productMapper).toProductResponse(testProduct);
+    }
+
+    @Test
+    void testGetProductByIdSuccess() {
+        // Arrange
+        when(productRepository.findById(1L)).thenReturn(java.util.Optional.of(testProduct));
+        when(productMapper.toProductResponse(testProduct)).thenReturn(productResponse);
+
+        // Act
+        ProductResponse result = productService.getProductById(1L);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(productResponse.getProductId(), result.getProductId());
+        assertEquals(productResponse.getName(), result.getName());
+        assertEquals(productResponse.getUnitPrice(), result.getUnitPrice());
+        assertEquals(productResponse.getQuantity(), result.getQuantity());
+        assertEquals(productResponse.getInStock(), result.getInStock());
+
+        // Verify interactions
+        verify(productRepository).findById(1L);
+        verify(productMapper).toProductResponse(testProduct);
+    }
+
+    @Test
+    void testGetProductByIdNotFound() {
+        // Arrange
+        when(productRepository.findById(1L)).thenReturn(java.util.Optional.empty());
+
+        // Act & Assert
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> productService.getProductById(1L));
+
+        assertTrue(exception.getMessage().contains("Product not found with id: 1"));
+
+        // Verify interactions
+        verify(productRepository).findById(1L);
+        verify(productMapper, never()).toProductResponse(any());
+    }
+
+    @Test
+    void testUpdateProductSuccess() {
+        // Arrange
+        when(productRepository.findById(1L)).thenReturn(java.util.Optional.of(testProduct));
+        when(productRepository.existsByName("Updated Product")).thenReturn(false);
+        when(productRepository.save(any(Product.class))).thenReturn(testProduct);
+        when(productMapper.toProductResponse(testProduct)).thenReturn(productResponse);
+
+        // Act
+        ProductResponse result = productService.updateProduct(1L, productUpdateRequest);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(productResponse.getProductId(), result.getProductId());
+
+        // Verify interactions
+        verify(productRepository).findById(1L);
+        verify(productRepository).existsByName("Updated Product");
+        verify(productRepository).save(any(Product.class));
+        verify(productMapper).toProductResponse(testProduct);
+    }
+
+    @Test
+    void testUpdateProductNotFound() {
+        // Arrange
+        when(productRepository.findById(1L)).thenReturn(java.util.Optional.empty());
+
+        // Act & Assert
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> productService.updateProduct(1L, productUpdateRequest));
+
+        assertTrue(exception.getMessage().contains("Product not found with id: 1"));
+
+        // Verify interactions
+        verify(productRepository).findById(1L);
+        verify(productRepository, never()).existsByName(any());
+        verify(productRepository, never()).save(any());
+        verify(productMapper, never()).toProductResponse(any());
+    }
+
+    @Test
+    void testDeleteProductSuccess() {
+        // Arrange
+        when(productRepository.existsById(1L)).thenReturn(true);
+
+        // Act
+        productService.deleteProduct(1L);
+
+        // Assert - no exception thrown
+
+        // Verify interactions
+        verify(productRepository).existsById(1L);
+        verify(productRepository).deleteById(1L);
+    }
+
+    @Test
+    void testDeleteProductNotFound() {
+        // Arrange
+        when(productRepository.existsById(1L)).thenReturn(false);
+
+        // Act & Assert
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> productService.deleteProduct(1L));
+
+        assertTrue(exception.getMessage().contains("Product not found with id: 1"));
+
+        // Verify interactions
+        verify(productRepository).existsById(1L);
+        verify(productRepository, never()).deleteById(any());
     }
 }
