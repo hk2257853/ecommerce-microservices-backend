@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -443,21 +444,29 @@ class OrderServiceTest {
 
         @Test
         void testCreateOrderIdempotencyKeyRaceCondition() {
-                // Arrange - lock not acquired, another thread already completed the request
+                // Arrange - simulate: no cached result yet, lock already taken, result appears
+                // on second check
                 when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
                                 .thenReturn(null) // first call: no cached result yet
                                 .thenReturn(orderResponse); // second call: concurrent thread finished
                 when(idempotencyService.tryStart("orders", "create", testIdempotencyKey)).thenReturn(false);
+                // createOrder() {
+                // get() ← Mockito returns null (1st call)
+                // tryStart() ← Mockito returns false
+                // get() ← Mockito returns orderResponse (2nd call)
+                // }
 
                 // Act
-                OrderResponse result = orderService.createOrder(orderRequest);
+                OrderResponse result = orderService.createOrder(orderRequest); // irl 2 createOrder calls
 
                 // Assert
                 assertNotNull(result);
                 assertEquals(orderResponse.getOrderId(), result.getOrderId());
 
                 // Verify only idempotency interactions — business logic never reached
-                verify(idempotencyService, times(2)).get("orders", "create", testIdempotencyKey, OrderResponse.class);
+                verify(idempotencyService, times(2)).get("orders", "create", testIdempotencyKey, OrderResponse.class); // get
+                                                                                                                       // called
+                                                                                                                       // twice
                 verify(idempotencyService).tryStart("orders", "create", testIdempotencyKey);
                 verifyNoInteractions(userRepository, productRepository, orderFactory, orderRepository);
         }

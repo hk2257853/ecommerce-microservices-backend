@@ -12,6 +12,7 @@ import com.hk.ordersservice.factory.OrderFactory;
 import com.hk.ordersservice.mapper.OrderMapper;
 import com.hk.ordersservice.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class OrderService {
 
         private final OrderRepository orderRepository;
@@ -32,10 +34,16 @@ public class OrderService {
         private final IdempotencyService idempotencyService;
 
         public OrderResponse createOrder(OrderCreateRequest request) {
+                long startTime = System.currentTimeMillis();
+                log.info("Starting order creation for userId: {}, idempotencyKey: {}", request.getUserId(),
+                                request.getIdempotencyKey());
+
                 // Check idempotency first - if result already exists, return it
                 OrderResponse existingOrderResponse = idempotencyService.get("orders", "create",
                                 request.getIdempotencyKey(), OrderResponse.class);
                 if (existingOrderResponse != null) {
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        log.info("Returning cached response for duplicate request, elapsed: {}ms", elapsed);
                         return existingOrderResponse;
                 }
 
@@ -51,8 +59,13 @@ public class OrderService {
                         OrderResponse concurrentResponse = idempotencyService.get("orders", "create",
                                         request.getIdempotencyKey(), OrderResponse.class);
                         if (concurrentResponse != null) {
+                                long elapsed = System.currentTimeMillis() - startTime;
+                                log.info("Returning concurrent response after lock failure, elapsed: {}ms", elapsed);
                                 return concurrentResponse;
                         }
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        log.info("Lock not acquired for concurrent request, throwing exception, elapsed: {}ms",
+                                        elapsed);
                         throw new IdempotencyKeyExistsException(request.getIdempotencyKey(), null);
                 }
 
@@ -92,6 +105,10 @@ public class OrderService {
 
                         // Store idempotency mapping with full OrderResponse
                         idempotencyService.save("orders", "create", request.getIdempotencyKey(), orderResponse);
+
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        log.info("Order created successfully with orderId: {}, elapsed: {}ms", savedOrder.getId(),
+                                        elapsed);
 
                         return orderResponse;
                 } catch (Exception e) {

@@ -35,6 +35,8 @@ damn the output is too good. Done
 7. switch to constructor injection instead of autowired - done
 8. Design patterns in the current code (make sure we not overdoing) - stuff like builder (lombok), factory pattern for create order. TODO: factory part and learn .map(OrderItemRequest::getProductId) - NOTE: gotta practice stream well
 Additionally added response mappers along with not null in response java files (to avoid sending null in response) - reduced code significantly.
+boolean myMethod() { return true; }  // primitive, never null, direct use fine
+Boolean redisTemplate.delete()       // object, can be null, use Boolean.TRUE.equals()
 10. add automated testing... unit test and repository test for now. 
 Integration test - It tests multiple layers of your app working together end-to-end (HTTP → controller → service → database), as opposed to a unit test which tests a single class in isolation. 
 NOTE: all this is on h2 not real db.
@@ -475,3 +477,69 @@ Request → get(key) from Redis
 - PROCESSING state (5 min TTL) = safety net if app crashes mid-operation
 - Final response TTL = 24h
 - Threads don't share return values — each caller must fetch from Redis themselves
+
+
+## Logging conventions
+
+### Where to log
+- **Service** — main place. Business logic lives here, logs live here.
+- **Controller** — only for significant events (auth failure, bad request). Not every endpoint — RequestIdFilter covers request entry/exit.
+- **Repository** — never. Too noisy, framework handles DB logging.
+- **Factory/mapper** — never. No side effects, nothing meaningful.
+
+### What to log in a method
+- Entry with key inputs — `method started param1={} param2={}`
+- Exit with key result — `method completed result={} elapsed={}ms`
+- Every branch that changes behavior — cache hit, lock not acquired, validation failure, return
+- ERROR on every exception with context — never swallow silently
+
+### Common review failures
+- Exception caught but nothing logged — caller has no idea what went wrong
+- Logging sensitive data (passwords, tokens, PII) — security issue
+- Too many DEBUG logs in prod — noise
+
+### Rule of thumb
+If something goes wrong at 2am, can you debug it from logs alone? If no, add more logs.
+
+```markdown
+## Exception Handling — When to throw, swallow, rethrow
+
+### Throw
+Caller needs to know, can't proceed without it.
+```java
+throw new ResourceNotFoundException("User", "id", userId);
+```
+
+### Swallow (catch + log, don't throw)
+Optional/cleanup operation — failing it shouldn't break main flow.
+```java
+try {
+    redisTemplate.delete(redisKey);
+} catch (Exception e) {
+    log.error("Failed to clear lock", e); // don't throw, original exception matters more
+}
+```
+
+### Catch + rethrow
+Need to do cleanup but caller must still know it failed.
+```java
+} catch (Exception e) {
+    idempotencyService.clear(...); // cleanup
+    throw e;                       // caller still gets the error
+}
+```
+
+### Catch + wrap + rethrow
+Convert low-level exception to a meaningful one.
+```java
+} catch (SQLException e) {
+    throw new DatabaseException("Failed to save order", e); // hides SQL detail, exposes intent
+}
+```
+
+### Rule of thumb
+- Caller needs to know / can't proceed → throw
+- Cleanup / optional → swallow + log
+- Cleanup but caller must know → catch + rethrow
+- Low-level exception leaking up → wrap + rethrow
+```

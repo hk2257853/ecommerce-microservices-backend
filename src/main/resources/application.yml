@@ -50,6 +50,11 @@ spring:
     password: pass
     driver-class-name: org.postgresql.Driver
 
+logging:
+  level:
+    org.springframework.transaction: INFO
+    org.hibernate: INFO
+
 ---
 spring:
   config:
@@ -77,8 +82,3 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:pass}
     driver-class-name: org.postgresql.Driver
-
-logging:
-  level:
-    org.springframework.transaction: TRACE
-    org.hibernate: TRACE

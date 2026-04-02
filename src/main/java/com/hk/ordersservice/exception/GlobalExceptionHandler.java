@@ -1,5 +1,7 @@
 package com.hk.ordersservice.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -13,6 +15,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+  private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
@@ -29,9 +33,15 @@ public class GlobalExceptionHandler {
         errors,
         LocalDateTime.now());
 
+    logger.warn("Validation failed with {} field errors: {}", errors.size(), errors);
     return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
   }
 
+  // GlobalExceptionHandler catches it by type and decides what HTTP response to
+  // return. Without the custom class, you can't have a specific @ExceptionHandler
+  // for it (specific message and status code).
+  // so in my service i throw ResourceNotFoundException, and here it catches it
+  // and returns a 404
   @ExceptionHandler(ResourceNotFoundException.class)
   public ResponseEntity<ErrorResponse> handleResourceNotFoundException(ResourceNotFoundException ex) {
     ErrorResponse errorResponse = new ErrorResponse(
@@ -40,6 +50,7 @@ public class GlobalExceptionHandler {
         null,
         LocalDateTime.now());
 
+    logger.warn("Resource not found exception: {}", ex.getMessage());
     return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
   }
 
@@ -51,6 +62,7 @@ public class GlobalExceptionHandler {
         null,
         LocalDateTime.now());
 
+    logger.warn("Duplicate resource exception: {}", ex.getMessage());
     return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
   }
 
@@ -62,6 +74,7 @@ public class GlobalExceptionHandler {
         null,
         LocalDateTime.now());
 
+    logger.warn("Business rule exception: {}", ex.getMessage());
     return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
   }
 
@@ -73,23 +86,37 @@ public class GlobalExceptionHandler {
         null,
         LocalDateTime.now());
 
+    logger.warn("Insufficient stock exception: {}", ex.getMessage());
     return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
   }
 
-  @ExceptionHandler(RuntimeException.class)
-  public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
-    ex.printStackTrace();
+  @ExceptionHandler(IdempotencyKeyExistsException.class)
+  public ResponseEntity<ErrorResponse> handleIdempotencyKeyExistsException(IdempotencyKeyExistsException ex) {
     ErrorResponse errorResponse = new ErrorResponse(
-        HttpStatus.NOT_FOUND.value(),
+        HttpStatus.CONFLICT.value(),
         ex.getMessage(),
         null,
         LocalDateTime.now());
 
-    return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    logger.warn("Idempotency key conflict: {}", ex.getMessage());
+    return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+  }
+
+  @ExceptionHandler(RuntimeException.class)
+  public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
+    logger.error("Runtime exception occurred: {}", ex.getMessage(), ex);
+    ErrorResponse errorResponse = new ErrorResponse(
+        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+        "Runtime error occurred",
+        null,
+        LocalDateTime.now());
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
   }
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
+    logger.error("Unexpected exception occurred: {}", ex.getMessage(), ex);
     ErrorResponse errorResponse = new ErrorResponse(
         HttpStatus.INTERNAL_SERVER_ERROR.value(),
         "Internal server error",

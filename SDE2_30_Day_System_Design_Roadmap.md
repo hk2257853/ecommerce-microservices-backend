@@ -47,3 +47,7 @@ Final Readiness Checklist
 • Understand idempotency and retries.
 • Know queues and async flows.
 • Can explain scaling and tradeoffs clearly.
+
+
+Missing: 
+JWT
