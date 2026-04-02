@@ -5,6 +5,7 @@ import com.hk.ordersservice.dto.OrderItemRequest;
 import com.hk.ordersservice.dto.OrderItemResponse;
 import com.hk.ordersservice.dto.OrderResponse;
 import com.hk.ordersservice.entity.*;
+import com.hk.ordersservice.exception.IdempotencyKeyExistsException;
 import com.hk.ordersservice.exception.InsufficientStockException;
 import com.hk.ordersservice.exception.ResourceNotFoundException;
 import com.hk.ordersservice.factory.OrderFactory;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -48,6 +50,9 @@ class OrderServiceTest {
         @Mock
         private OrderMapper orderMapper;
 
+        @Mock
+        private IdempotencyService idempotencyService;
+
         @InjectMocks
         private OrderService orderService;
 
@@ -57,9 +62,13 @@ class OrderServiceTest {
         private OrderCreateRequest orderRequest;
         private Order testOrder;
         private OrderResponse orderResponse;
+        private String testIdempotencyKey;
 
         @BeforeEach
         void setUp() {
+                // Generate unique idempotency key for each test
+                testIdempotencyKey = UUID.randomUUID().toString();
+
                 // Create test user
                 testUser = User.builder()
                                 .id(1L)
@@ -92,6 +101,7 @@ class OrderServiceTest {
                 // Create order request
                 orderRequest = OrderCreateRequest.builder()
                                 .userId(1L)
+                                .idempotencyKey(testIdempotencyKey)
                                 .items(Arrays.asList(
                                                 OrderItemRequest.builder()
                                                                 .productId(1L)
@@ -126,6 +136,9 @@ class OrderServiceTest {
         @Test
         void testCreateOrderSuccess() {
                 // Arrange - if this method gets called with this input, return this output
+                when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
+                                .thenReturn(null);
+                when(idempotencyService.tryStart("orders", "create", testIdempotencyKey)).thenReturn(true);
                 when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
                 when(productRepository.findAllById(Arrays.asList(1L, 2L)))
                                 .thenReturn(Arrays.asList(testProduct1, testProduct2));
@@ -133,6 +146,8 @@ class OrderServiceTest {
                                 .thenReturn(testOrder);
                 when(orderRepository.save(testOrder)).thenReturn(testOrder);
                 when(orderMapper.toOrderResponse(testOrder)).thenReturn(orderResponse);
+                doNothing().when(idempotencyService).save("orders", "create", testIdempotencyKey,
+                                orderResponse);
 
                 // Act - Call the actual service method with real input.
                 OrderResponse result = orderService.createOrder(orderRequest);
@@ -155,16 +170,24 @@ class OrderServiceTest {
                  * actually called.
                  */
                 // Verify interactions - checking the journey.
+                verify(idempotencyService).get("orders", "create", testIdempotencyKey,
+                                OrderResponse.class);
+                verify(idempotencyService).tryStart("orders", "create", testIdempotencyKey);
                 verify(userRepository).findById(1L);
                 verify(productRepository).findAllById(Arrays.asList(1L, 2L));
                 verify(orderFactory).createOrder(eq(testUser), any(), any());
                 verify(orderRepository).save(testOrder);
                 verify(orderMapper).toOrderResponse(testOrder);
+                verify(idempotencyService).save("orders", "create", testIdempotencyKey, orderResponse);
         }
 
         @Test
         void testCreateOrderUserNotFound() {
                 // Arrange
+                when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
+                                .thenReturn(null);
+                when(idempotencyService.tryStart("orders", "create", testIdempotencyKey)).thenReturn(true);
+                doNothing().when(idempotencyService).clear("orders", "create", testIdempotencyKey);
                 when(userRepository.findById(1L)).thenReturn(Optional.empty());
 
                 // Act & Assert
@@ -177,6 +200,10 @@ class OrderServiceTest {
                 assertTrue(exception.getMessage().contains("1"));
 
                 // Verify interactions
+                verify(idempotencyService).get("orders", "create", testIdempotencyKey,
+                                OrderResponse.class);
+                verify(idempotencyService).tryStart("orders", "create", testIdempotencyKey);
+                verify(idempotencyService).clear("orders", "create", testIdempotencyKey);
                 verify(userRepository).findById(1L);
                 verify(productRepository, never()).findAllById(any());
                 verify(orderFactory, never()).createOrder(any(), any(), any());
@@ -187,6 +214,10 @@ class OrderServiceTest {
         @Test
         void testCreateOrderProductsNotFound() {
                 // Arrange
+                when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
+                                .thenReturn(null);
+                when(idempotencyService.tryStart("orders", "create", testIdempotencyKey)).thenReturn(true);
+                doNothing().when(idempotencyService).clear("orders", "create", testIdempotencyKey);
                 when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
                 when(productRepository.findAllById(Arrays.asList(1L, 2L)))
                                 .thenReturn(Arrays.asList(testProduct1));
@@ -197,6 +228,10 @@ class OrderServiceTest {
                                 () -> orderService.createOrder(orderRequest));
 
                 // Verify — factory and save should never be reached
+                verify(idempotencyService).get("orders", "create", testIdempotencyKey,
+                                OrderResponse.class);
+                verify(idempotencyService).tryStart("orders", "create", testIdempotencyKey);
+                verify(idempotencyService).clear("orders", "create", testIdempotencyKey);
                 verify(userRepository).findById(1L);
                 verify(productRepository).findAllById(Arrays.asList(1L, 2L));
                 verify(orderFactory, never()).createOrder(any(), any(), any());
@@ -303,6 +338,7 @@ class OrderServiceTest {
                 // Arrange - Create order request with quantity that exceeds available stock
                 OrderCreateRequest insufficientStockRequest = OrderCreateRequest.builder()
                                 .userId(1L)
+                                .idempotencyKey(testIdempotencyKey)
                                 .items(Arrays.asList(
                                                 OrderItemRequest.builder()
                                                                 .productId(2L) // Product 2 has only 5 quantity
@@ -310,6 +346,10 @@ class OrderServiceTest {
                                                                 .build()))
                                 .build();
 
+                when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
+                                .thenReturn(null);
+                when(idempotencyService.tryStart("orders", "create", testIdempotencyKey)).thenReturn(true);
+                doNothing().when(idempotencyService).clear("orders", "create", testIdempotencyKey);
                 when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
                 when(productRepository.findAllById(Arrays.asList(2L)))
                                 .thenReturn(Arrays.asList(testProduct2));
@@ -325,6 +365,10 @@ class OrderServiceTest {
                 assertTrue(exception.getMessage().contains("5"));
 
                 // Verify interactions
+                verify(idempotencyService).get("orders", "create", testIdempotencyKey,
+                                OrderResponse.class);
+                verify(idempotencyService).tryStart("orders", "create", testIdempotencyKey);
+                verify(idempotencyService).clear("orders", "create", testIdempotencyKey);
                 verify(userRepository).findById(1L);
                 verify(productRepository).findAllById(Arrays.asList(2L));
                 verify(orderFactory, never()).createOrder(any(), any(), any());
@@ -335,6 +379,9 @@ class OrderServiceTest {
         @Test
         void testCreateOrderStockDecrementSuccess() {
                 // Arrange
+                when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
+                                .thenReturn(null);
+                when(idempotencyService.tryStart("orders", "create", testIdempotencyKey)).thenReturn(true);
                 when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
                 when(productRepository.findAllById(Arrays.asList(1L, 2L)))
                                 .thenReturn(Arrays.asList(testProduct1, testProduct2));
@@ -342,6 +389,8 @@ class OrderServiceTest {
                                 .thenReturn(testOrder);
                 when(orderRepository.save(testOrder)).thenReturn(testOrder);
                 when(orderMapper.toOrderResponse(testOrder)).thenReturn(orderResponse);
+                doNothing().when(idempotencyService).save("orders", "create", testIdempotencyKey,
+                                orderResponse);
 
                 // Act
                 OrderResponse result = orderService.createOrder(orderRequest);
@@ -350,8 +399,7 @@ class OrderServiceTest {
                 assertNotNull(result);
 
                 // Verify stock was decremented
-                verify(productRepository, times(2)).save(any(Product.class)); // 2 for stock decrement + 1 in
-                                                                              // orderRepository.save
+                verify(productRepository, times(2)).save(any(Product.class));
 
                 // Verify product quantities were updated correctly
                 verify(productRepository)
@@ -368,5 +416,49 @@ class OrderServiceTest {
                                                                                                                        // =
                                                                                                                        // 4
                                 ));
+        }
+
+        @Test
+        void testCreateOrderWithExistingIdempotencyKey() {
+                // Arrange
+                when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
+                                .thenReturn(orderResponse);
+
+                // Act
+                OrderResponse result = orderService.createOrder(orderRequest);
+
+                // Assert
+                assertNotNull(result);
+                assertEquals(orderResponse.getOrderId(), result.getOrderId());
+
+                // Verify that order creation was skipped
+                verify(idempotencyService).get("orders", "create", testIdempotencyKey,
+                                OrderResponse.class);
+                verify(userRepository, never()).findById(any());
+                verify(productRepository, never()).findAllById(any());
+                verify(orderFactory, never()).createOrder(any(), any(), any());
+                verify(orderRepository, never()).save(any());
+                verify(idempotencyService, never()).save(any(), any(), any(), any());
+        }
+
+        @Test
+        void testCreateOrderIdempotencyKeyRaceCondition() {
+                // Arrange - lock not acquired, another thread already completed the request
+                when(idempotencyService.get("orders", "create", testIdempotencyKey, OrderResponse.class))
+                                .thenReturn(null) // first call: no cached result yet
+                                .thenReturn(orderResponse); // second call: concurrent thread finished
+                when(idempotencyService.tryStart("orders", "create", testIdempotencyKey)).thenReturn(false);
+
+                // Act
+                OrderResponse result = orderService.createOrder(orderRequest);
+
+                // Assert
+                assertNotNull(result);
+                assertEquals(orderResponse.getOrderId(), result.getOrderId());
+
+                // Verify only idempotency interactions — business logic never reached
+                verify(idempotencyService, times(2)).get("orders", "create", testIdempotencyKey, OrderResponse.class);
+                verify(idempotencyService).tryStart("orders", "create", testIdempotencyKey);
+                verifyNoInteractions(userRepository, productRepository, orderFactory, orderRepository);
         }
 }

@@ -20,6 +20,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -75,6 +76,7 @@ class InsufficientStockIntegrationTest {
                 // Create order request with quantity exceeding available stock
                 OrderCreateRequest orderRequest = OrderCreateRequest.builder()
                                 .userId(testUser.getId())
+                                .idempotencyKey(UUID.randomUUID().toString())
                                 .items(List.of(
                                                 OrderItemRequest.builder()
                                                                 .productId(lowStockProduct.getId())
@@ -104,6 +106,7 @@ class InsufficientStockIntegrationTest {
                 // Create order request with quantity exactly matching available stock
                 OrderCreateRequest orderRequest = OrderCreateRequest.builder()
                                 .userId(testUser.getId())
+                                .idempotencyKey(UUID.randomUUID().toString())
                                 .items(List.of(
                                                 OrderItemRequest.builder()
                                                                 .productId(lowStockProduct.getId())
@@ -136,6 +139,7 @@ class InsufficientStockIntegrationTest {
                 // Create order request with one sufficient and one insufficient item
                 OrderCreateRequest orderRequest = OrderCreateRequest.builder()
                                 .userId(testUser.getId())
+                                .idempotencyKey(UUID.randomUUID().toString())
                                 .items(List.of(
                                                 OrderItemRequest.builder()
                                                                 .productId(sufficientProduct.getId())

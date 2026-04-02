@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -89,6 +90,7 @@ class OrderControllerIntegrationTest {
                 // Build order request
                 orderRequest = OrderCreateRequest.builder()
                                 .userId(testUser.getId())
+                                .idempotencyKey(UUID.randomUUID().toString())
                                 .items(List.of(
                                                 OrderItemRequest.builder()
                                                                 .productId(testProduct1.getId())

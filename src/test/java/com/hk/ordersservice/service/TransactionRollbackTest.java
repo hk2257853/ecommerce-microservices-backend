@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -80,6 +81,7 @@ class TransactionRollbackTest {
                 // Create order request with mixed items - one sufficient, one insufficient
                 OrderCreateRequest orderRequest = OrderCreateRequest.builder()
                                 .userId(testUser.getId())
+                                .idempotencyKey(UUID.randomUUID().toString())
                                 .items(List.of(
                                                 OrderItemRequest.builder()
                                                                 .productId(sufficientProduct.getId())
@@ -119,6 +121,7 @@ class TransactionRollbackTest {
                 // Create order request with sufficient stock
                 OrderCreateRequest orderRequest = OrderCreateRequest.builder()
                                 .userId(testUser.getId())
+                                .idempotencyKey(UUID.randomUUID().toString())
                                 .items(List.of(
                                                 OrderItemRequest.builder()
                                                                 .productId(sufficientProduct.getId())

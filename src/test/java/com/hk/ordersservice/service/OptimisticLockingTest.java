@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -72,6 +73,7 @@ class OptimisticLockingTest {
     void testConcurrentOrderCreationOptimisticLocking() {
         OrderCreateRequest orderRequest1 = OrderCreateRequest.builder()
                 .userId(testUser.getId())
+                .idempotencyKey(UUID.randomUUID().toString())
                 .items(List.of(
                         OrderItemRequest.builder()
                                 .productId(testProduct.getId())

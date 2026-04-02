@@ -34,9 +34,8 @@ class ProductServiceCachingIntegrationTest {
     @BeforeEach
     void setUp() {
         // Clear all caches before each test
-        cacheManager.getCacheNames().forEach(cacheName -> 
-            cacheManager.getCache(cacheName).clear());
-        
+        cacheManager.getCacheNames().forEach(cacheName -> cacheManager.getCache(cacheName).clear());
+
         productRepository.deleteAll();
 
         // Create test product
@@ -56,60 +55,69 @@ class ProductServiceCachingIntegrationTest {
 
         // First call - should hit database and populate cache
         ProductResponse result1 = productService.getProductById(testProduct.getId());
-        
+
         assertThat(result1).isNotNull();
         assertThat(result1.getProductId()).isEqualTo(testProduct.getId());
         assertThat(result1.getName()).isEqualTo(testProduct.getName());
-        
+
         // Verify cache is populated after first call
         assertThat(productsCache.get(testProduct.getId())).isNotNull();
 
         // Second call - should use cache
         ProductResponse result2 = productService.getProductById(testProduct.getId());
-        
+
         assertThat(result2).isNotNull();
         assertThat(result2.getProductId()).isEqualTo(testProduct.getId());
         assertThat(result2.getName()).isEqualTo(testProduct.getName());
-        
+
         // Verify both calls return identical results
         assertThat(result1).isEqualTo(result2);
-        
+
         // Verify cache still contains the entry
         assertThat(productsCache.get(testProduct.getId())).isNotNull();
     }
 
     @Test
-    void testUpdateProductEvictsCache() {
+    void testUpdateProductUpdatesCache() {
         // First call to populate cache
         ProductResponse result1 = productService.getProductById(testProduct.getId());
         var productsCache = cacheManager.getCache("products");
-        
+
         // Verify cache is populated
         assertThat(productsCache.get(testProduct.getId())).isNotNull();
-        
-        // Update product - should evict cache
+
+        // Update product - should update cache with new data
         var updateRequest = com.hk.ordersservice.dto.ProductUpdateRequest.builder()
                 .name("Updated Product Name")
                 .unitPrice(new BigDecimal("75.00"))
                 .quantity(20)
                 .build();
-        
+
         ProductResponse updatedResult = productService.updateProduct(testProduct.getId(), updateRequest);
-        
-        // Verify cache was evicted
-        assertThat(productsCache.get(testProduct.getId())).isNull();
-        
+
+        // Verify cache was updated with new data (not evicted)
+        assertThat(productsCache.get(testProduct.getId())).isNotNull();
+
+        // Verify the cached value matches the updated result
+        var cachedValueWrapper = productsCache.get(testProduct.getId());
+        assertThat(cachedValueWrapper).isNotNull();
+        var cachedValue = cachedValueWrapper.get();
+        assertThat(cachedValue).isNotNull();
+        assertThat(cachedValue.toString()).contains("Updated Product Name");
+
         // Verify update was successful
         assertThat(updatedResult.getName()).isEqualTo("Updated Product Name");
         assertThat(updatedResult.getUnitPrice()).isEqualTo(new BigDecimal("75.00"));
         assertThat(updatedResult.getQuantity()).isEqualTo(20);
-        
-        // Subsequent call should hit database and repopulate cache
+
+        // Subsequent call should use cache (not hit database)
         ProductResponse resultAfterUpdate = productService.getProductById(testProduct.getId());
-        
-        // Verify cache is repopulated with updated data
+
+        // Verify cache still contains the updated data
         assertThat(productsCache.get(testProduct.getId())).isNotNull();
         assertThat(resultAfterUpdate.getName()).isEqualTo("Updated Product Name");
+        assertThat(resultAfterUpdate.getUnitPrice()).isEqualTo(new BigDecimal("75.00"));
+        assertThat(resultAfterUpdate.getQuantity()).isEqualTo(20);
     }
 
     @Test
@@ -117,16 +125,16 @@ class ProductServiceCachingIntegrationTest {
         // First call to populate cache
         ProductResponse result1 = productService.getProductById(testProduct.getId());
         var productsCache = cacheManager.getCache("products");
-        
+
         // Verify cache is populated
         assertThat(productsCache.get(testProduct.getId())).isNotNull();
-        
+
         // Delete product - should evict cache
         productService.deleteProduct(testProduct.getId());
-        
+
         // Verify cache was evicted
         assertThat(productsCache.get(testProduct.getId())).isNull();
-        
+
         // Verify product is deleted from database
         assertThat(productRepository.existsById(testProduct.getId())).isFalse();
     }

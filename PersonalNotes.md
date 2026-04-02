@@ -451,3 +451,27 @@ In memory cache vs Redis:
 - In memory cache is faster but only available in the current application instance
 - Redis is slower but available across multiple application instances and can be shared across multiple applications (distributed system, multiple backend instances - inmemory cache will be out of sync)
 - Additionally redis gives extra durability (if backend crashes, cache is not lost)
+
+
+## Idempotency
+
+GET, PUT, DELETE are idempotent by nature — multiple calls = same effect.
+POST is not — multiple calls create multiple resources (e.g. user charged twice).
+
+For non-idempotent operations, client sends a unique `idempotencyKey` with the request.
+Server uses it to detect and deduplicate retries.
+
+### Flow
+Request → get(key) from Redis
+- JSON found → return cached response (duplicate, skip processing)
+- null → tryStart(key) → atomic SETNX in Redis
+  - false → another thread has the lock → get() one more time → return or throw
+  - true (a 5min TTL added) → process → save(key, response) → return response
+  - exception → clear(key) so client can retry
+- See: IdempotencyService.java, OrderService.java for full details.
+
+### Key points
+- Redis SETNX is atomic — handles concurrency, no DB-level locking needed
+- PROCESSING state (5 min TTL) = safety net if app crashes mid-operation
+- Final response TTL = 24h
+- Threads don't share return values — each caller must fetch from Redis themselves
