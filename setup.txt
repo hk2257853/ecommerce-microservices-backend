@@ -1,0 +1,7 @@
+Add this in readme.md later
+
+pgadmin for db
+docker for redis
+run command
+additionally we have k6 for load testing
+

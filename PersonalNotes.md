@@ -543,3 +543,52 @@ Convert low-level exception to a meaningful one.
 - Cleanup but caller must know → catch + rethrow
 - Low-level exception leaking up → wrap + rethrow
 ```
+
+## Load Testing
+
+### Why
+Verify service handles concurrent load — find bottlenecks before prod does.
+
+### Key metrics
+- **Throughput** — requests/sec the service handles (higher = better)
+- **Latency p95/p99** — 95th/99th percentile response time. Don't use average — one slow request skews it.
+  - eg: p95=200ms means 95% of requests finished in 200ms or less
+- **Error rate** — % of failed requests under load
+- **Bottleneck** — what breaks first: DB, Redis, thread pool, CPU
+eg: you ramp to 100 virtual users. DB connection pool is set to 10 (maximum-pool-size: 10). 90 threads are waiting for a connection → latency spikes → requests timeout. DB is the bottleneck, not the code.
+
+### Tools
+- **k6** — write tests in JS, simple setup, good reports
+- **Gatling** — Java/Scala, more enterprise
+- **JMeter** — old but widely used in big companies
+
+### k6 basics
+```js
+import http from 'k6/http';
+
+export let options = {
+  vus: 10,        // virtual users (concurrent)
+  duration: '30s' // how long to run
+};
+
+export default function () {
+  http.post('http://localhost:8080/api/orders', payload);
+}
+```
+
+### What to look for in results
+```
+scenarios: 10 VUs, 30s
+✓ status 201: 95%
+http_req_duration: avg=120ms p95=340ms p99=800ms
+http_reqs: 1200 total, 40/s throughput
+```
+- p95 spike → DB or Redis slow under load
+- high error rate → thread pool exhausted or connection pool full
+- low throughput → service can't handle concurrency
+
+### Interview talking points
+- Always use p95/p99, never average for latency
+- Idempotency key must be unique per load test request — otherwise Redis cache skews results
+- Redis caching should visibly reduce latency on duplicate requests
+- Connection pool size (`maximum-pool-size` in yml) is often first bottleneck

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -99,6 +100,19 @@ public class GlobalExceptionHandler {
         LocalDateTime.now());
 
     logger.warn("Idempotency key conflict: {}", ex.getMessage());
+    return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+  }
+
+  @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+  public ResponseEntity<ErrorResponse> handleOptimisticLockingFailureException(
+      ObjectOptimisticLockingFailureException ex) {
+    ErrorResponse errorResponse = new ErrorResponse(
+        HttpStatus.CONFLICT.value(),
+        "The resource was modified by another transaction. Please try again.",
+        null,
+        LocalDateTime.now());
+
+    logger.warn("Optimistic locking failure: {}", ex.getMessage());
     return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
   }
 
