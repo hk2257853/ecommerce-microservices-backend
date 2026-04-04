@@ -592,3 +592,103 @@ http_reqs: 1200 total, 40/s throughput
 - Idempotency key must be unique per load test request — otherwise Redis cache skews results
 - Redis caching should visibly reduce latency on duplicate requests
 - Connection pool size (`maximum-pool-size` in yml) is often first bottleneck
+
+
+*Rate Limiting — Personal Notes*
+
+---
+
+*What it is*
+
+Controlling how many requests a client can make in a time window. Protects your service from abuse, DoS, and runaway clients.
+
+---
+
+*Core algorithms*
+
+*Fixed Window* — count requests in a fixed time slot (e.g. 100 req/min). Simple. Problem: burst attack at window boundary — 100 requests at 11:59 + 100 at 12:00 = 200 requests in 2 seconds, both technically "valid".
+
+*Sliding Window* — tracks request timestamps, counts only those within the last N seconds from now. Fixes boundary burst. More memory-heavy (stores timestamps per user).
+
+*Token Bucket* — bucket fills with tokens at a fixed rate, each request consumes one. Allows controlled bursting (if bucket is full). Used by AWS, Stripe. More natural for APIs.
+
+*Leaky Bucket* — requests enter a queue, processed at a fixed rate. Smooths traffic completely. No bursting allowed.
+
+---
+
+*What you implemented*
+
+Fixed window via Redis Lua. The INCR + EXPIRE on first hit = one counter per window per IP. Window resets hard when key expires.
+
+---
+
+*Why Lua script*
+
+INCR and EXPIRE are two separate Redis commands. If your app crashes between them, key never expires → client permanently rate-limited. Lua runs atomically in Redis — both ops happen as one unit or not at all.
+
+---
+
+*Fail-open vs fail-closed*
+
+- *Fail-open* — Redis down? Let requests through. Availability > protection. What you implemented.
+- *Fail-closed* — Redis down? Block all requests (503). Protection > availability.
+
+Choose based on what's more dangerous for your use case. Payment endpoints → fail-closed. General API → fail-open usually fine.
+
+---
+
+*IP extraction header priority*
+
+
+X-Forwarded-For → X-Real-IP → request.getRemoteAddr()
+
+
+- X-Forwarded-For: set by proxies/load balancers, contains chain of IPs — take [0] for original client
+- X-Real-IP: set by Nginx, single clean IP
+- getRemoteAddr(): whoever is directly connected — useless behind a proxy (you'd get the proxy's IP)
+
+*Security note: these headers can be spoofed by clients. In production you'd validate or only trust headers set by *your infrastructure.
+
+---
+
+*Standard response headers*
+
+
+X-RateLimit-Limit: 100        # max allowed
+X-RateLimit-Remaining: 73     # left in current window
+X-RateLimit-Reset: 60         # seconds until window resets
+
+
+Return 429 Too Many Requests when exceeded.
+
+---
+
+*Where rate limiting actually lives in production*
+
+Usually not in your app. Common real-world setups:
+
+- *API Gateway* (Kong, AWS API Gateway) — handles rate limiting before traffic even hits your service
+- *Nginx/Envoy* — limit_req_zone directive, done at proxy level
+- *App-level* (what you built) — useful for per-user/per-endpoint granularity that infra-level tools can't easily do
+
+In big tech, multiple layers are common — gateway for global limits, app-level for fine-grained business rules.
+
+---
+
+*Rate limiting granularity options*
+
+- Per IP (what you built)
+- Per user ID (auth token)
+- Per endpoint (/api/orders vs /api/products get different limits)
+- Per tenant (SaaS multi-tenancy)
+- Combination (user + endpoint)
+
+Key design changes per key: rate_limit:{ip} vs rate_limit:{userId} vs rate_limit:{endpoint} vs rate_limit:{tenant} vs rate_limit:{user}:{endpoint}
+
+---
+
+*Strategy pattern relevance here*
+
+Different algorithms suit different use cases. Extracting a RateLimiter interface means you can swap Fixed Window → Token Bucket without touching the filter. Config-driven selection = no code change to switch.
+
+I should be able to explain tradeoffs - the algo, rate limiter in app vs gateway (for global limits or granular control), fail-open vs fail-closed, why lua, why redis over in memory, ip vs user id vs endpoint vs combination
