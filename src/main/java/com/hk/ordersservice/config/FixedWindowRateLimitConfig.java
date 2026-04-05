@@ -6,6 +6,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.script.RedisScript;
 
 /**
+ * My understanding for the config file: if other algo configs look similar, we
+ * can go with interfaces. Otherwise, it is better to have a factory.
+ *
  * Configuration for rate limiting Redis script and related beans.
  */
 @Configuration

@@ -1,0 +1,13 @@
+Heavy week. Here's the feel:
+
+**Day 15-17** are setup + happy path — getting Kafka running, producing an event when an order is created, consuming it in a notification worker. Satisfying once it clicks.
+
+**Day 18** is where it gets real — what happens when the consumer fails? Retries, dead letter queue. This is the stuff that actually matters in production and comes up in interviews.
+
+**Day 19** is conceptual — eventual consistency. Your order service says "done" but the notification hasn't fired yet. Is that ok? When is it not ok? Good discussion topic for SDE-2 rounds.
+
+**Day 20** is optional but high value — splitting into 2 services forces you to think about service boundaries, shared DBs, contracts between services. Skip if time is tight.
+
+**Day 21** revision — don't skip this, async/queues is a dense topic.
+
+Kafka vs RabbitMQ — go Kafka. It's what big tech uses and what interviewers expect you to know.

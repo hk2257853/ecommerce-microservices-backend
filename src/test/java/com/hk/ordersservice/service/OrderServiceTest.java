@@ -10,6 +10,7 @@ import com.hk.ordersservice.exception.InsufficientStockException;
 import com.hk.ordersservice.exception.ResourceNotFoundException;
 import com.hk.ordersservice.factory.OrderFactory;
 import com.hk.ordersservice.mapper.OrderMapper;
+import com.hk.ordersservice.publisher.OrderEventPublisherIF;
 import com.hk.ordersservice.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,9 @@ class OrderServiceTest {
 
         @Mock
         private IdempotencyService idempotencyService;
+
+        @Mock
+        private OrderEventPublisherIF orderEventPublisher;
 
         @InjectMocks
         private OrderService orderService;
@@ -149,6 +153,7 @@ class OrderServiceTest {
                 when(orderMapper.toOrderResponse(testOrder)).thenReturn(orderResponse);
                 doNothing().when(idempotencyService).save("orders", "create", testIdempotencyKey,
                                 orderResponse);
+                doNothing().when(orderEventPublisher).publishOrderCreated(any());
 
                 // Act - Call the actual service method with real input.
                 OrderResponse result = orderService.createOrder(orderRequest);
@@ -392,6 +397,7 @@ class OrderServiceTest {
                 when(orderMapper.toOrderResponse(testOrder)).thenReturn(orderResponse);
                 doNothing().when(idempotencyService).save("orders", "create", testIdempotencyKey,
                                 orderResponse);
+                doNothing().when(orderEventPublisher).publishOrderCreated(any());
 
                 // Act
                 OrderResponse result = orderService.createOrder(orderRequest);

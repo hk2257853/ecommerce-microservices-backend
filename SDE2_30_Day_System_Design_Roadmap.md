@@ -21,6 +21,7 @@ Week 2 – Performance + Correctness
 • Day 12: Logging, request IDs, structured logs.
 • Day 13: Basic load testing and performance measurement.
 • Day 14: Revise caching + idempotency theory.
+TODO: implement 2-3 rate limit algos from scratch in pure java.
 
 Week 3 – Async & Distributed Systems
 • Day 15: Install Kafka or RabbitMQ.

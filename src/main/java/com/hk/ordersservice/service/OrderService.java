@@ -1,6 +1,7 @@
 package com.hk.ordersservice.service;
 
 import com.hk.ordersservice.dto.OrderCreateRequest;
+import com.hk.ordersservice.dto.OrderCreatedEvent;
 import com.hk.ordersservice.dto.OrderItemRequest;
 import com.hk.ordersservice.dto.OrderItemResponse;
 import com.hk.ordersservice.dto.OrderResponse;
@@ -10,6 +11,7 @@ import com.hk.ordersservice.exception.InsufficientStockException;
 import com.hk.ordersservice.exception.ResourceNotFoundException;
 import com.hk.ordersservice.factory.OrderFactory;
 import com.hk.ordersservice.mapper.OrderMapper;
+import com.hk.ordersservice.publisher.OrderEventPublisherIF;
 import com.hk.ordersservice.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,7 @@ public class OrderService {
         private final OrderFactory orderFactory;
         private final OrderMapper orderMapper;
         private final IdempotencyService idempotencyService;
+        private final OrderEventPublisherIF orderEventPublisher;
 
         public OrderResponse createOrder(OrderCreateRequest request) {
                 long startTime = System.currentTimeMillis();
@@ -105,6 +108,15 @@ public class OrderService {
 
                         // Store idempotency mapping with full OrderResponse
                         idempotencyService.save("orders", "create", request.getIdempotencyKey(), orderResponse);
+
+                        // Publish order created event
+                        OrderCreatedEvent event = OrderCreatedEvent.builder()
+                                        .orderId(savedOrder.getId())
+                                        .userId(savedOrder.getUser().getId())
+                                        .totalAmount(savedOrder.getTotalAmount())
+                                        .createdAt(savedOrder.getCreatedAt())
+                                        .build();
+                        orderEventPublisher.publishOrderCreated(event);
 
                         long elapsed = System.currentTimeMillis() - startTime;
                         log.info("Order created successfully with orderId: {}, elapsed: {}ms", savedOrder.getId(),

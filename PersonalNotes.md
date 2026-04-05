@@ -692,3 +692,32 @@ Key design changes per key: rate_limit:{ip} vs rate_limit:{userId} vs rate_limit
 Different algorithms suit different use cases. Extracting a RateLimiter interface means you can swap Fixed Window → Token Bucket without touching the filter. Config-driven selection = no code change to switch.
 
 I should be able to explain tradeoffs - the algo, rate limiter in app vs gateway (for global limits or granular control), fail-open vs fail-closed, why lua, why redis over in memory, ip vs user id vs endpoint vs combination
+
+
+## Kafka
+
+Async messaging — producer publishes, consumer processes independently.
+Order service doesn't wait for notification to complete.
+
+### Core terms
+- Producer — publishes messages to a topic
+- Consumer — listens to a topic and processes messages
+- Topic — named channel (`order.created`)
+- Consumer Group — multiple consumers sharing load. Each message goes to ONE consumer in the group.
+- Broker — Kafka server that stores and serves messages
+- Offset — position of a message in a partition. Kafka tracks what each consumer group has read. Kinda like array index
+
+### Spring Boot
+- `KafkaTemplate.send(topic, event)` — publish
+- `@KafkaListener(topics = "order.created", groupId = "notification-group")` — consume
+- JSON serializer/deserializer — configure in `application.yml` with trusted packages
+
+### KRaft vs Zookeeper
+- Zookeeper was a separate process Kafka needed for metadata management
+- KRaft (Kafka 3.3+) — Kafka manages its own metadata, no Zookeeper needed
+- Always use KRaft for new setups
+
+### Key points
+- `@KafkaListener` is Spring AOP — bypassed in unit tests, mock the publisher
+- Consumer group load balancing — 3 instances + 1 partition = only 1 instance consumes
+- See: KafkaOrderEventPublisher.java, NotificationConsumer.java, application.yml
