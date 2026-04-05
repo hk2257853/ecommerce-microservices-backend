@@ -698,6 +698,10 @@ I should be able to explain tradeoffs - the algo, rate limiter in app vs gateway
 
 Async messaging — producer publishes, consumer processes independently.
 Order service doesn't wait for notification to complete.
+ie Kafka is a message broker — a middleman that sits between services.
+Service A puts a message in Kafka. Service B picks it up whenever it's ready. They don't talk to each other directly.
+
+Event-driven just means instead of Service A calling Service B directly (HTTP), it fires an event ("order created") and doesn't wait. Anyone who cares about that event can listen — notification service, analytics service, inventory service. Service A doesn't know or care who's listening.
 
 ### Core terms
 - Producer — publishes messages to a topic
@@ -721,3 +725,105 @@ Order service doesn't wait for notification to complete.
 - `@KafkaListener` is Spring AOP — bypassed in unit tests, mock the publisher
 - Consumer group load balancing — 3 instances + 1 partition = only 1 instance consumes
 - See: KafkaOrderEventPublisher.java, NotificationConsumer.java, application.yml
+
+## Kafka — Failure Handling
+
+Without retry/DLQ: consumer fails → message lost (kafka marks offset as read) → offset moves forward → never processed again.
+
+### Retries
+`@RetryableTopic(attempts = "3", backoff = @Backoff(delay = 1000, multiplier = 2))`
+- Retries 3 times with exponential backoff: 1s → 2s → 4s
+- Spring Kafka creates retry topics automatically behind the scenes
+- `@Retryable` (Spring Retry) does NOT work for Kafka consumers — use `@RetryableTopic`
+
+### DLQ (Dead Letter Queue)
+After all retries exhausted → message moves to `order.created.DLT` topic instead of being dropped. Or it can be sent to a database or alert email to the ops team.
+
+`@DltHandler` — method that handles DLT messages.
+
+### Key points
+- `@RetryableTopic` sets up DLQ automatically — no extra config needed
+- DLT topic name = original topic + suffix (default `.DLT`)
+- Each consumer group tracks its own retry/DLT independently
+- See: NotificationConsumer.java
+
+## Eventual Consistency
+
+System will be consistent eventually, just not instantly.
+Gap between operation completing and side effects finishing.
+
+### Current flow
+createOrder() → saves to DB → decrements stock → publishes to Kafka → returns 201
+                                                          ↓
+                                            NotificationConsumer picks it up
+                                            (milliseconds to seconds later)
+
+Client gets 201 immediately. Notification hasn't fired yet. That's eventual consistency.
+
+### When acceptable
+- Notifications, emails — user doesn't care if email arrives 2s later
+- Audit logs, analytics — slight delay is fine
+- Any non-critical side effect
+
+### When NOT acceptable
+- Payment confirmation — user needs immediate feedback
+- Inventory — async stock decrement = overselling window
+- Anything financial or safety-critical
+- So these are synchronous and part of the same transaction, won't put in kafka. We use HTTP/REST or gRPC.
+
+### Strong vs Eventual consistency
+- Strong — everything in one transaction, slower, tightly coupled, guaranteed
+- Eventual — faster, decoupled, temporary inconsistency accepted
+
+### Right split in our codebase
+- Stock decrement → synchronous, inside createOrder transaction (strong consistency)
+- Notification → async via Kafka (eventual consistency)
+- Core business logic stays transactional, side effects go async
+
+### Interview answer
+"We use eventual consistency for non-critical side effects like notifications.
+Core business logic — stock decrement, payment — stays in the same transaction
+for strong consistency."
+
+### Kafka — Deeper Concepts
+
+#### Partitions
+- Topic is split into partitions for parallelism
+- Without partitions: one consumer processes all messages sequentially — bottleneck
+- With N partitions: N consumer instances process in parallel — N times throughput
+- Each partition handled by exactly one consumer instance at a time
+- Rule: num consumer instances ≤ num partitions (extra instances sit idle)
+- Consumer instances = same code running multiple times (multiple pods/threads)
+
+Example: Topic order.created (3 partitions, 3 instances of NotificationConsumer)
+
+Partition 0: [order-101, order-104, order-107]
+Partition 1: [order-102, order-105, order-108]
+Partition 2: [order-103, order-106, order-109]
+
+Consumer A (instance 1) → Partition 0
+Consumer B (instance 2) → Partition 1
+Consumer C (instance 3) → Partition 2
+
+All 3 processing in parallel. Add 4th instance → sits idle, no partition left.
+Add 4th partition → 4th instance activates.
+
+All 3 processing in parallel. Add a 4th consumer → sits idle, no partition left.
+
+#### Message Ordering
+- Ordering guaranteed WITHIN a partition, not across partitions
+- If order matters (e.g. order events for same orderId) → use same partition key
+- `kafkaTemplate.send(topic, key, event)` — same key = same partition
+
+#### At-least-once vs Exactly-once
+- Kafka default = at-least-once — consumer could process same message twice
+  (e.g. consumer crashes after processing but before committing offset - so not marked as read)
+- Exactly-once = possible but complex, requires idempotent consumers
+- Practical fix: make your consumer idempotent — processing same message twice
+  has no extra effect (e.g. check if notification already sent before sending)
+
+#### Consumer Lag
+- Gap between latest message in topic and what consumer has processed
+- High lag = consumer falling behind producer
+- Visible in Kafka UI → Consumer Groups tab
+- Fix: add more consumers (up to partition count) or optimize consumer logic
