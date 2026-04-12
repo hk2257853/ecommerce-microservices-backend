@@ -1,6 +1,6 @@
-package com.hk.ordersservice.consumer;
+package com.hk.notification_service.consumer;
 
-import com.hk.ordersservice.dto.OrderCreatedEvent;
+import com.hk.common.dto.OrderCreatedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;

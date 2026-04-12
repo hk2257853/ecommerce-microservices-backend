@@ -1,6 +1,6 @@
-package com.hk.ordersservice.consumer;
+package com.hk.notification_service.consumer;
 
-import com.hk.ordersservice.dto.OrderCreatedEvent;
+import com.hk.common.dto.OrderCreatedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,13 +32,13 @@ class NotificationConsumerTest {
 
     @Test
     void handleOrderCreatedEvent_Success() {
-        // When & Then
+        // When & Then - Just verify it doesn't throw exceptions
         assertDoesNotThrow(() -> notificationConsumer.handleOrderCreatedEvent(testEvent));
     }
 
     @Test
     void handleDlt_Success() {
-        // When & Then
+        // When & Then - Just verify it doesn't throw exceptions
         assertDoesNotThrow(() -> notificationConsumer.handleDlt(testEvent));
     }
 }

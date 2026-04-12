@@ -1,6 +1,6 @@
 package com.hk.ordersservice.publisher;
 
-import com.hk.ordersservice.dto.OrderCreatedEvent;
+import com.hk.common.dto.OrderCreatedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

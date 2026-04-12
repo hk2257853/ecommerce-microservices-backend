@@ -1,7 +1,7 @@
 package com.hk.ordersservice.service;
 
+import com.hk.common.dto.OrderCreatedEvent;
 import com.hk.ordersservice.dto.OrderCreateRequest;
-import com.hk.ordersservice.dto.OrderCreatedEvent;
 import com.hk.ordersservice.dto.OrderItemRequest;
 import com.hk.ordersservice.dto.OrderItemResponse;
 import com.hk.ordersservice.dto.OrderResponse;

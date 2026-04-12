@@ -1,7 +1,6 @@
 package com.hk.ordersservice.integration;
 
-import com.hk.ordersservice.consumer.NotificationConsumer;
-import com.hk.ordersservice.dto.OrderCreatedEvent;
+import com.hk.common.dto.OrderCreatedEvent;
 import com.hk.ordersservice.publisher.KafkaOrderEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,9 +20,6 @@ class KafkaIntegrationTest {
 
     @Autowired
     private KafkaOrderEventPublisher publisher;
-
-    @Autowired
-    private NotificationConsumer consumer;
 
     @Test
     void testKafkaEndToEnd() {

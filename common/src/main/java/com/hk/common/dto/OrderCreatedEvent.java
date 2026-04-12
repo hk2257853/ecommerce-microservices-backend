@@ -1,4 +1,4 @@
-package com.hk.ordersservice.dto;
+package com.hk.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;

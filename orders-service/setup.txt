@@ -5,3 +5,4 @@ docker for redis
 run command
 additionally we have k6 for load testing
 
+docker-compose up -d

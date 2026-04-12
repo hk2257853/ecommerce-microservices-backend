@@ -1,6 +1,6 @@
 package com.hk.ordersservice.publisher;
 
-import com.hk.ordersservice.dto.OrderCreatedEvent;
+import com.hk.common.dto.OrderCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;

@@ -827,3 +827,279 @@ All 3 processing in parallel. Add a 4th consumer → sits idle, no partition lef
 - High lag = consumer falling behind producer
 - Visible in Kafka UI → Consumer Groups tab
 - Fix: add more consumers (up to partition count) or optimize consumer logic
+
+
+## Multi-Module Project (Microservices Structure)
+
+Single repo (monorepo), multiple deployable services.
+Common pattern when services need to share DTOs/contracts without duplicating code.
+
+### Structure
+Backend/                        ← root (has settings.gradle + gradlew)
+├── settings.gradle             ← ties all modules together
+├── gradlew                     ← controls the whole project from root
+├── common/                     ← shared library (NOT a Spring Boot app)
+│   └── src/main/java/com/hk/common/dto/
+│       └── OrderCreatedEvent.java
+├── orders-service/             ← Spring Boot app, port 8080, produces events
+└── notification-service/       ← Spring Boot app, port 8081, consumes events
+
+### Setup
+- Root `settings.gradle` — lists all modules, folder names must match exactly
+- `common/build.gradle` — plain Java library, no Spring Boot plugin, use Spring BOM for versions
+- Reference common in other modules: `implementation project(':common')`
+- Delete individual `settings.gradle` from each service — only root one needed
+- Full build: `.\gradlew clean build` | Single service: `cd orders-service && .\gradlew bootRun`
+
+### Key points
+- Each service has its own `application.yml`, port, dependencies
+- Services communicate only via Kafka — no direct calls, no shared DB
+- `common` = shared contracts. Change once, both services pick it up
+- In interviews: "shared contracts in common module, schema registry + Avro for larger scale"
+
+### Why split?
+- Notification-service can crash without affecting order creation
+- Deploy and scale independently
+
+```markdown
+## Distributed Systems — SDE-2 Concepts
+
+### Service Communication
+
+**Sync (HTTP/REST or gRPC)**
+- Service A calls Service B and waits for response
+- Use when: you need immediate response (payment, stock check)
+- REST — simple, widely used, JSON
+- gRPC — binary (faster), strict schema, good for internal service-to-service
+
+**Async (Kafka)**
+- Service A fires event, doesn't wait
+- Use when: side effects that don't need immediate response (notifications, analytics)
+- Rule: need a response → HTTP. Fire and forget → Kafka
+
+---
+
+### Service Discovery
+How does Service A know where Service B is running?
+- Services register themselves on startup (Eureka, Consul)
+- Other services look up by name, not hardcoded IP
+- In Kubernetes — DNS handles it automatically, services find each other by name
+- Without it: hardcoded URLs break when services scale or move
+
+---
+
+### API Gateway
+Single entry point for all external clients.
+Client talks to gateway, gateway routes to correct service.
+
+Handles:
+- Auth (validate JWT before request reaches service)
+- Rate limiting (block abusive clients at edge)
+- Routing (POST /orders → orders-service, GET /products → product-service)
+- SSL termination
+
+Examples: Kong, AWS API Gateway, Nginx
+Without it: every service handles auth/rate limiting independently = duplication
+
+---
+
+### Distributed Tracing
+Request spans multiple services — how do you debug a slow request?
+
+- Trace ID generated at API Gateway, passed through every service via headers
+- Each service logs with the same Trace ID
+- Tools stitch logs together into a single trace timeline
+- You already did request IDs in Week 2 — same concept, extended across services
+- Tools: Jaeger, Zipkin, Datadog
+
+---
+
+### Circuit Breaker
+Problem: Service B is slow → Service A keeps retrying → threads pile up → Service A crashes too → cascades into full outage.
+
+Circuit breaker states:
+- **Closed** — normal, requests pass through
+- **Open** — too many failures, fail fast, return fallback immediately (no waiting)
+- **Half-open** — after timeout, let one request through to test if B recovered
+
+Spring Boot: Resilience4j
+```java
+@CircuitBreaker(name = "notificationService", fallbackMethod = "fallback")
+public void sendNotification() { ... }
+```
+
+Interview answer: "Circuit breaker prevents cascading failures by failing fast instead of waiting for a slow downstream service."
+
+---
+
+### CAP Theorem
+Distributed system can only guarantee 2 of 3:
+- **C**onsistency — every read gets the latest write
+- **A**vailability — every request gets a response (not guaranteed to be latest)
+- **P**artition tolerance — system works even if network between nodes breaks
+
+Partition tolerance is non-negotiable in distributed systems (networks always fail eventually).
+So real choice is **CP vs AP**:
+- **CP** — consistent but may reject requests during partition (banks, payments)
+- **AP** — always responds but data may be stale (social media likes, notifications)
+
+Your eventual consistency discussion from Kafka notes = AP tradeoff.
+
+---
+
+### Database Per Service
+Each microservice owns its own database — no shared DB between services.
+
+Why:
+- Shared DB = tight coupling. One service's schema change breaks another.
+- Independent deployability requires independent data
+
+Tradeoff: joining data across services requires API calls or event-driven sync, not SQL joins.
+
+In your codebase: orders-service has its own Postgres. notification-service has no DB (stateless).
+
+---
+
+### Saga Pattern
+Problem: distributed transaction across services — order created, payment charged, stock decremented. If payment fails, how do you roll back order and stock?
+
+Two approaches:
+- **Choreography** — each service publishes events, others react. No central coordinator.
+  ```
+  orders-service → order.created → payment-service → payment.processed → inventory-service
+  if payment fails → payment.failed → orders-service rolls back
+  ```
+- **Orchestration** — central saga orchestrator tells each service what to do step by step
+
+Choreography = simpler, more decoupled. Orchestration = easier to reason about complex flows.
+
+You don't need 2PC (two-phase commit) — too slow, too complex for microservices.
+
+---
+
+### CQRS (Command Query Responsibility Segregation)
+Separate read and write models.
+
+- **Command** — write operations (createOrder, updateProduct) → goes to write DB
+- **Query** — read operations (getOrders, getProducts) → goes to read DB (replica or separate store)
+
+Why:
+- Reads and writes have different scaling needs — reads are usually 10x more frequent
+- Read model can be optimized differently (denormalized, cached, Elasticsearch)
+
+In your codebase: `getAllProducts` hitting same DB as `createProduct` — that's fine at small scale. At scale, reads would go to a read replica.
+
+---
+
+### Interview cheat sheet
+| Concept | One-liner |
+|---------|-----------|
+| Service Discovery | Services find each other by name, not hardcoded IP |
+| API Gateway | Single entry point — handles auth, routing, rate limiting |
+| Circuit Breaker | Fail fast when downstream is down, prevent cascading failures |
+| CAP Theorem | CP = consistent, AP = available. Networks always partition, pick your tradeoff |
+| Saga | Distributed transactions without 2PC — compensating events on failure |
+| CQRS | Separate read and write models for independent scaling |
+| Database per service | No shared DB — loose coupling, independent deployability |
+```
+
+```markdown
+## Distributed Systems — How Our Implementations Change at Scale
+
+### Redis Caching in Distributed Setup
+Single service + Redis = fine as is.
+Multiple instances of same service + Redis = still fine (that's the whole point of external cache).
+
+Problems at scale:
+- **Cache stampede** — all instances cache expires same time → all hit DB simultaneously
+  Fix: probabilistic early expiry or distributed lock (Redisson) for cache rebuild
+- **Cache invalidation across services** — orders-service updates product, but product-service
+  has stale cache. No easy fix — TTL is your friend, or publish a `product.updated` Kafka event
+  that all services listen to and evict their own cache
+- **Redis goes down** — all services lose cache, hit DB directly → DB overwhelmed
+  Fix: circuit breaker around Redis calls, fallback to DB
+
+---
+
+### Idempotency in Distributed Setup
+Single service = works as is (Redis SETNX is atomic).
+
+Problems at scale:
+- **Multiple instances, same Redis** = still fine, SETNX is atomic across all instances
+- **Redis goes down mid-request** — PROCESSING lock never set, duplicate request goes through
+  Fix: accept this rare edge case or use Redis Sentinel/Cluster for HA
+- **Different services need idempotency** — your `IdempotencyService` is already generic
+  (`service`, `operation`, `key`) so it works across services as-is
+- **Key namespace collision** — two services using same key prefix
+  Fix: already solved with `idempotency:orders:create:{key}` pattern
+
+---
+
+### Rate Limiting in Distributed Setup
+Single instance rate limiter (in-memory) = broken in distributed setup.
+3 instances × 100 req/min limit = 300 req/min actually allowed.
+
+Fix: move state to Redis (you already did this with Lua scripts).
+Redis-based rate limiter = correct across all instances.
+
+Problems at scale:
+- **Redis goes down** — rate limiter fails. Two strategies:
+  - Fail open — allow all requests (availability > correctness)
+  - Fail closed — block all requests (correctness > availability)
+  - Your call based on use case. APIs usually fail open.
+- **Rate limit per user vs per IP** — in multi-service setup, user identity
+  comes from JWT. API Gateway is better place for rate limiting than individual services.
+- **Different limits per service** — API Gateway handles this centrally
+
+---
+
+### Kafka in Distributed Setup
+Single consumer = works as is.
+
+Problems at scale:
+- **Consumer lag** — notification-service falling behind orders-service publish rate
+  Fix: add more consumer instances (up to partition count)
+- **Consumer rebalancing** — new instance joins group → Kafka rebalances partitions
+  → brief pause in consumption. Normal behavior, just be aware.
+- **Schema changes** — you rename `orderId` to `id` in `OrderCreatedEvent` in common module
+  → notification-service gets `null` silently
+  Fix: never remove/rename fields, only add. Or use Avro + Schema Registry.
+- **Ordering across services** — if notification-service and analytics-service both consume
+  `order.created`, they process in parallel but independently. Fine for most cases.
+- **DLQ monitoring** — in production, `order.created.DLT` needs alerting.
+  Nobody watching DLT = silent data loss.
+
+---
+
+### Logging + Tracing in Distributed Setup
+You have request IDs + MDC in orders-service.
+
+Problem: request hits API Gateway → orders-service → notification-service via Kafka.
+Each service has its own logs. How do you trace one user's request end to end?
+
+Fix:
+- Pass `X-Request-ID` header through all HTTP calls
+- Include same request ID in Kafka event payload
+- Each service picks it up and adds to MDC
+- Tools like Jaeger/Zipkin stitch logs into a single trace
+
+Your current setup handles the HTTP part. Kafka part needs request ID in `OrderCreatedEvent`.
+
+---
+
+### General failure handling pattern
+Every external call (Redis, Kafka, DB) can fail. Standard pattern:
+
+```
+try {
+    // call external system
+} catch (Exception e) {
+    log.error(...)
+    // fail open or fail closed depending on criticality
+    // never let one system's failure bring down the whole service
+}
+```
+
+You already do this in `IdempotencyService` — Redis fails → log → return null → proceed.
+Same pattern applies to Kafka publish failures, cache misses, etc.
+```

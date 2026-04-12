@@ -1,6 +1,6 @@
 package com.hk.ordersservice.publisher;
 
-import com.hk.ordersservice.dto.OrderCreatedEvent;
+import com.hk.common.dto.OrderCreatedEvent;
 
 /**
  * Strategy interface for publishing order events.
