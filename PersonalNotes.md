@@ -1,3 +1,41 @@
+# Backend Development Notes — Table of Contents
+
+- [Project Initialization](#project-initialization)
+- [Project Structure](#project-structure)
+- [API Design Best Practices](#api-design-best-practices)
+- [Spring Data JPA Repository](#spring-data-jpa-repository)
+- [Service Layer Architecture](#service-layer-architecture)
+- [Automated Testing](#automated-testing)
+- [Flyway Database Migrations](#flyway-database-migrations)
+- [Redis Caching](#redis-caching)
+  - [Annotations](#annotations)
+  - [Cache Invalidation Strategies](#cache-invalidation-strategies)
+  - [TTL Tradeoffs](#ttl-tradeoffs)
+  - [Cache Stampede](#cache-stampede)
+  - [When NOT to Cache](#when-not-to-cache)
+  - [Mental Model](#mental-model)
+  - [Places to Cache](#places-to-do-caching)
+  - [CacheManager](#cachemanager)
+  - [In-Memory vs Redis](#in-memory-cache-vs-redis)
+- [Idempotency](#idempotency)
+- [Logging Conventions](#logging-conventions)
+- [Exception Handling](#exception-handling--when-to-throw-swallow-rethrow)
+- [Load Testing](#load-testing)
+- [Rate Limiting](#rate-limiting)
+- [Kafka](#kafka)
+  - [Kafka Basics](#kafka)
+  - [Failure Handling](#kafka--failure-handling)
+  - [Eventual Consistency](#eventual-consistency)
+  - [Deep Concepts](#kafka--deeper-concepts)
+- [Multi-Module Projects](#multi-module-project-microservices-structure)
+- [Distributed Systems](#distributed-systems--sde-2-concepts)
+  - [Core Concepts](#distributed-systems--sde-2-concepts)
+  - [At Scale Implementation](#distributed-systems--how-our-implementations-change-at-scale)
+
+---
+
+## Project Initialization
+
 Initialised project using spring initializr. - https://start.spring.io/
 Initially it just had SpringBootApplication.
 The endponits were defined in seperate classes (RestController).
