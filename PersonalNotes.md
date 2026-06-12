@@ -1166,6 +1166,52 @@ In your codebase: orders-service has its own Postgres. notification-service has 
 
 ---
 
+### Read Replicas (Scale Reads)
+Spreads query load by routing write traffic to a Primary database and read traffic to one or more Read Replica nodes.
+
+- **Primary DB**: Handles all state changes (INSERT, UPDATE, DELETE).
+- **Read Replicas**: Copy data from the Primary and handle read queries (SELECT).
+- **Replication**: Typically asynchronous to maintain write throughput.
+
+**Trade-offs & Considerations:**
+*   **Replication Lag & Stale Reads**: Replicas lag milliseconds/seconds behind the primary. A user could perform a write, refresh immediately, and see stale data.
+    *   *Mitigation*: Route "read-your-own-writes" queries (e.g., viewing your own profile immediately after updating it) to the Primary DB, while routing general traffic (e.g., product browsing) to Replicas.
+*   **Routing Logic**: The application must manage multiple data sources. In Spring Boot, this is achieved by defining a routing data source that inspects `@Transactional(readOnly = true)` to route queries to replicas.
+*   **Failover & Recovery**: If the primary node dies, a read replica must be promoted to primary. During promotion, the system may briefly reject writes.
+
+---
+
+### Database Sharding (Scale Writes & Reads Horizontally)
+Horizontally partitions a dataset across multiple independent database servers (nodes). While read replicas only scale read throughput, sharding distributes both reads and writes by dividing the dataset, bypassing single-node hardware limits (CPU, memory, and disk I/O).
+
+- **Shard Key**: A column value (e.g., `user_id`, `tenant_id`) used to determine which database node holds a specific row of data.
+- **Routing**: `hash(Shard Key) % Number of Shards` determines the destination node.
+
+**Trade-offs & Considerations:**
+*   **Choosing a Shard Key**: This is the most critical design decision.
+    *   *Good Key*: High cardinality, even distribution of data and traffic (e.g., `user_id`).
+    *   *Bad Key / Hotspots*: Low cardinality or uneven distribution (e.g., sharding by `country_id` if 90% of traffic is from one country leads to a single hot database node).
+*   **Cross-Shard Joins**: Traditional SQL JOINs cannot cross database instances.
+    *   *Mitigation*: Denormalize static reference data (e.g., lookup tables like states or countries) by duplicating it on all shards, or perform manual application-level stitching in memory.
+*   **Re-sharding Overhead**: If a shard runs out of disk/CPU and you need to add more shards, simple modulo hashing requires moving a massive amount of data.
+    *   *Mitigation*: Use Consistent Hashing (Hash Ring) to minimize the amount of data that needs to be relocated when adding shards.
+
+---
+
+### CQRS (Command Query Responsibility Segregation)
+Completely separates the operations that write data (Commands) from the operations that read data (Queries).
+
+- **Command Model**: Handled by a database optimized for transactions, normalization, and strict validation (e.g., write-heavy PostgreSQL).
+- **Query Model**: Handled by a database optimized for search, aggregations, and high-read speeds (e.g., Elasticsearch, denormalized read-optimized tables). Instead of performing expensive, CPU-heavy table joins on the spot, the query model stores precomputed views of the data.
+- **Sync**: Changes to the write model publish domain events (e.g., via Kafka). Background event handlers consume these events to precompute and update the read model's data store, ensuring it is ready for instant retrieval.
+
+**Trade-offs & Considerations:**
+*   **Why CQRS? (Precomputed Views vs. On-the-Fly Joins)**: At high scale, executing complex queries with multiple table joins on the fly takes significant computation and time. CQRS shifts this overhead by **precomputing queries beforehand**. When a write occurs, background handlers capture the event, format the denormalized result, and store it. Read requests then simply fetch these precomputed, query-ready data "containers" instantly.
+*   **Eventual Consistency (AP)**: The read model lags behind the write model due to async event propagation. UI must be designed to handle this (e.g., optimistic UI updates).
+*   **High Complexity**: Introducing event-driven synchronization between databases increases operational overhead, risk of desynchronized state, and query debugging difficulty. Do not use CQRS for standard CRUD applications.
+
+---
+
 ### Saga Pattern
 Problem: distributed transaction across services — order created, payment charged, stock decremented. If payment fails, how do you roll back order and stock?
 
@@ -1183,30 +1229,18 @@ You don't need 2PC (two-phase commit) — too slow, too complex for microservice
 
 ---
 
-### CQRS (Command Query Responsibility Segregation)
-Separate read and write models.
-
-- **Command** — write operations (createOrder, updateProduct) → goes to write DB
-- **Query** — read operations (getOrders, getProducts) → goes to read DB (replica or separate store)
-
-Why:
-- Reads and writes have different scaling needs — reads are usually 10x more frequent
-- Read model can be optimized differently (denormalized, cached, Elasticsearch)
-
-In your codebase: `getAllProducts` hitting same DB as `createProduct` — that's fine at small scale. At scale, reads would go to a read replica.
-
----
-
 ### Interview cheat sheet
 | Concept | One-liner |
 |---------|-----------|
-| Service Discovery | Services find each other by name, not hardcoded IP |
-| API Gateway | Single entry point — handles auth, routing, rate limiting |
-| Circuit Breaker | Fail fast when downstream is down, prevent cascading failures |
-| CAP Theorem | CP = consistent, AP = available. Networks always partition, pick your tradeoff |
-| Saga | Distributed transactions without 2PC — compensating events on failure |
-| CQRS | Separate read and write models for independent scaling |
-| Database per service | No shared DB — loose coupling, independent deployability |
+| **Service Discovery** | Services find each other by name/registry, not hardcoded IPs |
+| **API Gateway** | Single entry point — handles auth, rate limiting, and dynamic routing |
+| **Circuit Breaker** | Fails fast when downstream is down, preventing cascading failures |
+| **CAP Theorem** | Trade-off between Consistency and Availability during network Partitions |
+| **Saga Pattern** | Manages distributed transactions via sequential local transactions and compensating actions |
+| **Database per Service** | Ensures loose coupling and independent deployability of microservices |
+| **Read Replicas** | Diverts read load away from primary DB to secondary read-only nodes |
+| **Database Sharding** | Horizontally partitions database rows across multiple servers using a shard key |
+| **CQRS** | Segregates write (Command) and read (Query) paths to scale them independently |
 ```
 
 ```markdown
