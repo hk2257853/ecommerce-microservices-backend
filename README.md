@@ -1,4 +1,4 @@
-# Backend Development Notes — Table of Contents
+# Backend Development Notes - Table of Contents
 
 - [Project Initialization](#project-initialization)
 - [Project Structure](#project-structure)
