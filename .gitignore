@@ -38,4 +38,27 @@ out/
 
 /logs/
 
+### Environment & Secrets ###
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+!.env.template
+!**/.env.template
+
+### Python & Node Artifacts ###
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+dist/
+
+### Archives & Scratch ###
 Backend.7z
+*.7z
+*.zip
+*.tar.gz
+LinkedIn Posts
+LinkedIn Posts*
+"LinkedIn Posts"
