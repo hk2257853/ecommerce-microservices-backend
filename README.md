@@ -8,6 +8,14 @@
 
 ---
 
+## 🎬 NexusOps Studio Showcase Walkthrough
+
+[![NexusOps Studio Walkthrough](nexusops_showcase_thumbnail.png)](nexusops_showcase_walkthrough_light.mp4)
+
+> 🎥 **[Watch the full 2-minute walkthrough (`nexusops_showcase_walkthrough_light.mp4`)](nexusops_showcase_walkthrough_light.mp4)** — *A comprehensive tour of NexusOps Studio highlighting Java Spring Boot commerce transactions, Redis Lua rate limiting, Kafka event feeds, and Python FastAPI GenAI pipelines.*
+
+---
+
 ## ⚡ Architecture at a Glance
 
 ```text

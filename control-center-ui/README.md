@@ -1,6 +1,16 @@
 # Control Center UI (Mission Control)
 
 > A dark/light modern ops dashboard built with **React**, **Vite**, **TypeScript**, and **Tailwind CSS**. Visualizes and tests both the Java microservices stack and the Python GenAI platform.
+>
+> 🌐 **Monorepo Ecosystem**: Part of the [Enterprise Polyglot Commerce & AI Control Center](../README.md) repository.
+
+---
+
+## 🎬 Video Walkthrough
+
+[![NexusOps Studio Walkthrough](../nexusops_showcase_thumbnail.png)](../nexusops_showcase_walkthrough_light.mp4)
+
+> 🎥 **[Watch the full 2-minute walkthrough (`nexusops_showcase_walkthrough_light.mp4`)](../nexusops_showcase_walkthrough_light.mp4)** — *A comprehensive tour of the Control Center UI in action, demonstrating live dual-mode operation, Kafka event streams, Redis Lua rate limiting, 4-stage Hybrid RAG, and LangGraph HITL human approvals.*
 
 ---
 
