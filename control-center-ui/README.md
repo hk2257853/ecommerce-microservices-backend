@@ -8,9 +8,9 @@
 
 ## 🎬 Video Walkthrough
 
-[![NexusOps Studio Walkthrough](../nexusops_showcase_thumbnail.png)](../nexusops_showcase_walkthrough_light.mp4)
+https://github.com/user-attachments/assets/08427a0d-0896-4b5b-bda8-18794506af79
 
-> 🎥 **[Watch the full 2-minute walkthrough (`nexusops_showcase_walkthrough_light.mp4`)](../nexusops_showcase_walkthrough_light.mp4)** — *A comprehensive tour of the Control Center UI in action, demonstrating live dual-mode operation, Kafka event streams, Redis Lua rate limiting, 4-stage Hybrid RAG, and LangGraph HITL human approvals.*
+> 🎥 **2-Minute Walkthrough** — *A comprehensive tour of the Control Center UI in action, demonstrating live dual-mode operation, Kafka event streams, Redis Lua rate limiting, 4-stage Hybrid RAG, and LangGraph HITL human approvals.*
 
 ---
 
