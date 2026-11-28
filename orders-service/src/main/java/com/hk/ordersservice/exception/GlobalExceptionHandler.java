@@ -2,9 +2,17 @@ package com.hk.ordersservice.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionSystemException;
+import org.springframework.transaction.TransactionTimedOutException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -114,6 +122,28 @@ public class GlobalExceptionHandler {
 
     logger.warn("Optimistic locking failure: {}", ex.getMessage());
     return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+  }
+
+  @ExceptionHandler({
+      CannotGetJdbcConnectionException.class,
+      CannotCreateTransactionException.class,
+      TransactionSystemException.class,
+      JpaSystemException.class,
+      QueryTimeoutException.class,
+      TransactionTimedOutException.class,
+      DataAccessResourceFailureException.class
+  })
+  public ResponseEntity<ErrorResponse> handleDatabaseUnavailable(Exception ex) {
+    logger.warn("Database unavailable or timed out: {}", ex.getMessage());
+    ErrorResponse errorResponse = new ErrorResponse(
+        HttpStatus.SERVICE_UNAVAILABLE.value(),
+        "Service temporarily unavailable. Please retry shortly.",
+        null,
+        LocalDateTime.now());
+
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header(HttpHeaders.RETRY_AFTER, "2")
+        .body(errorResponse);
   }
 
   @ExceptionHandler(RuntimeException.class)

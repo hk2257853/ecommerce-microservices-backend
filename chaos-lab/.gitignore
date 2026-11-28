@@ -1,0 +1,31 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs & temporary files
+logs/
+*.log
+tmp/
+*.tmp
+
+# Local Docker / Exporter runtime data
+data/
+prometheus_data/
+grafana_data/
+postgres_data/
+redis_data/
+
+# k6 load test outputs & reports
+results/
+summary.json
+*.csv
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+

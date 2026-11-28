@@ -6,6 +6,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hk.ordersservice.config.RedisResilienceGuard;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ public class IdempotencyService {
 
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final RedisResilienceGuard redisGuard;
 
     private static final Duration DEFAULT_TTL = Duration.ofHours(24);
     private static final String IDEMPOTENCY_PREFIX = "idempotency";
@@ -43,7 +45,7 @@ public class IdempotencyService {
         String redisKey = buildKey(service, operation, key);
         log.debug("Checking idempotency cache for key: {}", redisKey);
 
-        try {
+        return redisGuard.execute("idempotency:get:" + key, () -> {
             String value = redisTemplate.opsForValue().get(redisKey);
 
             if (value == null) {
@@ -56,24 +58,25 @@ public class IdempotencyService {
                 return null;
             }
 
-            T result = objectMapper.readValue(value, clazz);
-            log.info("Cache hit for idempotency key: {}, service: {}, operation: {}", key, service, operation);
-            return result;
-
-        } catch (Exception e) {
-            log.error("Error getting idempotency key: {}, service: {}, operation: {}", key, service, operation, e);
-            return null;
-        }
+            try {
+                T result = objectMapper.readValue(value, clazz);
+                log.info("Cache hit for idempotency key: {}, service: {}, operation: {}", key, service, operation);
+                return result;
+            } catch (Exception e) {
+                log.error("Error deserializing idempotency key: {}", key, e);
+                return null;
+            }
+        }, () -> null);
     }
 
     // claims the key. Uses setIfAbsent (Redis SETNX) so only one caller wins. Sets
     // value to "PROCESSING" with 5 min TTL as a safety net if the app crashes
-    // mid-operation.
+    // mid-operation. Fails open (true) if Redis is degraded so orders are not blocked.
     public boolean tryStart(String service, String operation, String key) {
         String redisKey = buildKey(service, operation, key);
         log.debug("Attempting to acquire idempotency lock for key: {}", redisKey);
 
-        try {
+        return redisGuard.execute("idempotency:tryStart:" + key, () -> {
             Boolean success = redisTemplate.opsForValue()
                     .setIfAbsent(redisKey, STATUS_PROCESSING, Duration.ofMinutes(5));
 
@@ -86,11 +89,7 @@ public class IdempotencyService {
             }
 
             return acquired;
-
-        } catch (Exception e) {
-            log.error("Error starting idempotency for key: {}, service: {}, operation: {}", key, service, operation, e);
-            return false;
-        }
+        }, () -> true);
     }
 
     // overwrites "PROCESSING" with the real JSON response. TTL bumps to 24h. Future
@@ -99,17 +98,17 @@ public class IdempotencyService {
         String redisKey = buildKey(service, operation, key);
         log.debug("Saving idempotency response for key: {}", redisKey);
 
-        try {
-            String json = objectMapper.writeValueAsString(response); // convert response to JSON string
-            redisTemplate.opsForValue().set(redisKey, json, DEFAULT_TTL);
-
-            log.info("Idempotency response saved for key: {}, service: {}, operation: {}, TTL: {} hours",
-                    key, service, operation, DEFAULT_TTL.toHours());
-
-        } catch (Exception e) {
-            log.error("Error saving idempotency response for key: {}, service: {}, operation: {}", key, service,
-                    operation, e);
-        }
+        redisGuard.execute("idempotency:save:" + key, () -> {
+            try {
+                String json = objectMapper.writeValueAsString(response);
+                redisTemplate.opsForValue().set(redisKey, json, DEFAULT_TTL);
+                log.info("Idempotency response saved for key: {}, service: {}, operation: {}, TTL: {} hours",
+                        key, service, operation, DEFAULT_TTL.toHours());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return null;
+        }, () -> null);
     }
 
     // deletes the key on failure so the client can retry. Without this, the
@@ -118,7 +117,7 @@ public class IdempotencyService {
         String redisKey = buildKey(service, operation, key);
         log.debug("Clearing idempotency lock for key: {}", redisKey);
 
-        try {
+        redisGuard.execute("idempotency:clear:" + key, () -> {
             Boolean deleted = redisTemplate.delete(redisKey);
             if (Boolean.TRUE.equals(deleted)) {
                 log.info("Idempotency lock cleared for key: {}, service: {}, operation: {}", key, service, operation);
@@ -126,13 +125,8 @@ public class IdempotencyService {
                 log.warn("Idempotency lock not found for clearing, key: {}, service: {}, operation: {}", key, service,
                         operation);
             }
-
-        } catch (Exception e) {
-            log.error("Error clearing idempotency lock for key: {}, service: {}, operation: {}", key, service,
-                    operation, e);
-            // not thrown as original exception is already being. if i throw here original
-            // exception will be lost
-        }
+            return null;
+        }, () -> null);
     }
 
     private String buildKey(String service, String operation, String key) {

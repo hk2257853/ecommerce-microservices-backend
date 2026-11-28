@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  # 1. Spring Boot orders-service (Scraped via host.docker.internal)
+  - job_name: 'orders-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 2s
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels:
+          application: 'orders-service'
+          environment: 'local-chaos-lab'
+
+  # 2. Redis Exporter
+  - job_name: 'redis'
+    scrape_interval: 2s
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          application: 'redis'
+
+  # 3. Prometheus Internal Metrics
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+

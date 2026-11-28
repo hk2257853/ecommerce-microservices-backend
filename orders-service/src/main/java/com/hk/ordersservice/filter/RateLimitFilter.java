@@ -45,6 +45,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final String X_RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset";
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path != null && path.startsWith("/actuator");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 

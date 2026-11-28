@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@Transactional
+@Transactional(timeout = 3)
 @RequiredArgsConstructor
 @Slf4j
 public class OrderService {

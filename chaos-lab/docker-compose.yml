@@ -1,0 +1,82 @@
+services:
+  # ============================================================================
+  # OBSERVABILITY STACK (Prometheus + Grafana)
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: chaos-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=24h'
+      - '--web.enable-lifecycle'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: chaos-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/chaos-resilience-overview.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ============================================================================
+  # CHAOS INJECTION ENGINE (Shopify Toxiproxy)
+  # ============================================================================
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.11.0
+    container_name: chaos-toxiproxy
+    ports:
+      - "8474:8474"   # Management HTTP API
+      - "26379:26379" # Toxic Proxy port for Redis
+      - "25432:25432" # Toxic Proxy port for PostgreSQL
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ============================================================================
+  # EXPORTERS & DATABASE
+  # ============================================================================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.63.0
+    container_name: chaos-redis-exporter
+    environment:
+      - REDIS_ADDR=host.docker.internal:6379
+    ports:
+      - "9121:9121"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: orders-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=ecommerce_system
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+

@@ -9,9 +9,9 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
-      timeout: 2000ms
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 200ms
   
   kafka:
     bootstrap-servers: localhost:9092
@@ -27,9 +27,9 @@ spring:
   
   datasource:
     hikari:
-      connection-timeout: 20000
-      maximum-pool-size: 10
-      minimum-idle: 5
+      connection-timeout: 1500
+      maximum-pool-size: 30
+      minimum-idle: 10
       idle-timeout: 300000
       max-lifetime: 1200000
 
@@ -47,6 +47,42 @@ spring:
 
 server:
   port: 8080
+  tomcat:
+    mbeanregistry:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      redis:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        slowCallDurationThreshold: 200ms
+        slowCallRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+# Spring Boot Actuator & Prometheus Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: orders-service
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
 
 # Rate limiting configuration
 rate-limit:
@@ -62,7 +98,7 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:postgresql://localhost:5432/ecommerce_system
+    url: jdbc:postgresql://localhost:${DB_PORT:5432}/ecommerce_system
     username: postgres
     password: pass
     driver-class-name: org.postgresql.Driver

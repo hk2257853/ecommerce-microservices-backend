@@ -1,12 +1,12 @@
 package com.hk.ordersservice.ratelimiter.impl;
 
 import com.hk.ordersservice.config.RateLimitProperties;
+import com.hk.ordersservice.config.RedisResilienceGuard;
 import com.hk.ordersservice.ratelimiter.RateLimiterIF;
 import com.hk.ordersservice.ratelimiter.RateLimitResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
@@ -29,14 +29,16 @@ public class FixedWindowRateLimiter implements RateLimiterIF {
     private final RateLimitProperties rateLimitProperties;
     private final RedisTemplate<String, String> redisTemplate;
     private final RedisScript<Long> fixedWindowRedisScript;
+    private final RedisResilienceGuard redisGuard;
 
     private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit:";
 
     @Override
     public RateLimitResult isWithinRateLimit(String clientIp) {
         String rateLimitKey = RATE_LIMIT_KEY_PREFIX + clientIp;
+        RateLimitResult failOpen = new RateLimitResult(true, 0, rateLimitProperties.getMaxRequests());
 
-        try {
+        return redisGuard.execute("rate-limit:" + clientIp, () -> {
             Long currentCount = redisTemplate.execute(
                     fixedWindowRedisScript,
                     Collections.singletonList(rateLimitKey),
@@ -44,24 +46,13 @@ public class FixedWindowRateLimiter implements RateLimiterIF {
 
             if (currentCount == null) {
                 log.warn("Redis script returned null for key: {}", rateLimitKey);
-                // Fail-open: allow request if Redis returns null
-                return new RateLimitResult(true, 0, rateLimitProperties.getMaxRequests());
+                return failOpen;
             }
 
             boolean allowed = currentCount <= rateLimitProperties.getMaxRequests();
             long remaining = Math.max(0, rateLimitProperties.getMaxRequests() - currentCount);
 
             return new RateLimitResult(allowed, currentCount, remaining);
-
-        } catch (RedisConnectionFailureException e) {
-            // Fail-open: allow request if Redis is unavailable
-            // NOTE: anything abuse-sensitive should not use this fail-open mechanism
-            // instead give a 503 service unavailable or similar
-            log.warn("Redis connection failed, allowing request through fail-open mechanism. IP: {}", clientIp, e);
-            return new RateLimitResult(true, 0, rateLimitProperties.getMaxRequests());
-        } catch (Exception e) {
-            log.error("Unexpected error in rate limiting for IP: {}. Allowing request.", clientIp, e);
-            return new RateLimitResult(true, 0, rateLimitProperties.getMaxRequests());
-        }
+        }, () -> failOpen);
     }
 }
