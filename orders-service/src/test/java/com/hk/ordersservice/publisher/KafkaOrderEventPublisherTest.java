@@ -40,27 +40,41 @@ class KafkaOrderEventPublisherTest {
     @Test
     void publishOrderCreated_Success() {
         // Given
-        when(kafkaTemplate.send(eq("order.created"), eq(testEvent)))
+        when(kafkaTemplate.send(eq("order.created"), eq("1"), eq(testEvent)))
                 .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null));
 
         // When
         assertDoesNotThrow(() -> publisher.publishOrderCreated(testEvent));
 
         // Then
-        verify(kafkaTemplate, times(1)).send("order.created", testEvent);
+        verify(kafkaTemplate, times(1)).send("order.created", "1", testEvent);
     }
 
     @Test
     void publishOrderCreated_Failure() {
         // Given
         RuntimeException testException = new RuntimeException("Kafka connection failed");
-        when(kafkaTemplate.send(eq("order.created"), eq(testEvent))).thenThrow(testException);
+        when(kafkaTemplate.send(eq("order.created"), eq("1"), eq(testEvent))).thenThrow(testException);
 
         // When & Then
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> publisher.publishOrderCreated(testEvent));
 
         assertEquals("Kafka connection failed", thrown.getMessage());
-        verify(kafkaTemplate, times(1)).send("order.created", testEvent);
+        verify(kafkaTemplate, times(1)).send("order.created", "1", testEvent);
+    }
+
+    @Test
+    void publishOrderCreated_AsyncFailureWrapped() {
+        java.util.concurrent.CompletableFuture<org.springframework.kafka.support.SendResult<String, OrderCreatedEvent>> failed =
+                new java.util.concurrent.CompletableFuture<>();
+        failed.completeExceptionally(new RuntimeException("Broker unavailable"));
+        when(kafkaTemplate.send(eq("order.created"), eq("1"), eq(testEvent))).thenReturn(failed);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> publisher.publishOrderCreated(testEvent));
+
+        assertTrue(thrown.getMessage().contains("orderId=1"));
+        verify(kafkaTemplate, times(1)).send("order.created", "1", testEvent);
     }
 }

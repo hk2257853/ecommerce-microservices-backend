@@ -5,10 +5,13 @@ import com.hk.ordersservice.dto.OrderItemRequest;
 import com.hk.ordersservice.entity.Order;
 import com.hk.ordersservice.entity.OrderItem;
 import com.hk.ordersservice.entity.OrderStatus;
+import com.hk.ordersservice.entity.OutboxEvent;
+import com.hk.ordersservice.entity.OutboxStatus;
 import com.hk.ordersservice.entity.Product;
 import com.hk.ordersservice.entity.User;
 import com.hk.ordersservice.repository.OrderItemRepository;
 import com.hk.ordersservice.repository.OrderRepository;
+import com.hk.ordersservice.repository.OutboxEventRepository;
 import com.hk.ordersservice.repository.ProductRepository;
 import com.hk.ordersservice.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +23,7 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 // This is an integration test for an order creation API endpoint
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
+@ActiveProfiles("test")
 
 class OrderControllerIntegrationTest {
 
@@ -50,6 +55,9 @@ class OrderControllerIntegrationTest {
         @Autowired
         private OrderItemRepository orderItemRepository;
 
+        @Autowired
+        private OutboxEventRepository outboxEventRepository;
+
         private User testUser;
         private Product testProduct1;
         private Product testProduct2;
@@ -59,6 +67,7 @@ class OrderControllerIntegrationTest {
         void setUp() {
                 // Clean up first - as the database is shared across tests, we need to clear it
                 // before each test other wise the data will interfere with other tests
+                outboxEventRepository.deleteAll();
                 orderItemRepository.deleteAll();
                 orderRepository.deleteAll();
                 productRepository.deleteAll();
@@ -164,5 +173,15 @@ class OrderControllerIntegrationTest {
                 Product updatedProduct2 = productRepository.findById(testProduct2.getId()).orElseThrow();
                 assertThat(updatedProduct1.getQuantity()).isEqualTo(8); // 10 - 2 = 8
                 assertThat(updatedProduct2.getQuantity()).isEqualTo(4); // 5 - 1 = 4
+
+                // Verify outbox event was persisted atomically as PENDING
+                List<OutboxEvent> outboxEvents = outboxEventRepository.findAll();
+                assertThat(outboxEvents).hasSize(1);
+                OutboxEvent outboxEvent = outboxEvents.get(0);
+                assertThat(outboxEvent.getAggregateId()).isEqualTo(String.valueOf(savedOrderId));
+                assertThat(outboxEvent.getEventType()).isEqualTo("ORDER_CREATED");
+                assertThat(outboxEvent.getTopic()).isEqualTo("order.created");
+                assertThat(outboxEvent.getStatus()).isEqualTo(OutboxStatus.PENDING);
+                assertThat(outboxEvent.getPayload()).contains("\"orderId\":" + savedOrderId);
         }
 }

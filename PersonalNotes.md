@@ -786,6 +786,13 @@ After all retries exhausted → message moves to `order.created.DLT` topic inste
 - Each consumer group tracks its own retry/DLT independently
 - See: NotificationConsumer.java
 
+### Transactional Outbox (Producer Side)
+- **Earlier:** `orders-service` saved the order to Postgres, then handed the event to Kafka **in memory**. If Kafka stayed down too long or the backend crashed, the event in memory disappeared forever.
+- **Now:**
+  1. When creating an order, Postgres saves **both** the order (`orders`) and the event (`outbox_events`, `status = PENDING`) in the **same database transaction** — so either both save or neither does.
+  2. A background poller inside `orders-service` (`OutboxRelay`, every `1s`) reads any `PENDING` rows from `outbox_events` and sends them to Kafka. *(Small detail: our Spring Boot poller reads Postgres and pushes to Kafka — Kafka itself doesn't read the DB.)*
+  3. Only after Kafka confirms "got it" does the poller update the DB row to `SENT`. If Kafka is down, rows just stay `PENDING` safely on disk in Postgres and get sent as soon as Kafka comes back.
+
 ## Eventual Consistency
 
 System will be consistent eventually, just not instantly.

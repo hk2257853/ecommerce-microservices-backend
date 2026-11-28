@@ -106,10 +106,7 @@ public class OrderService {
 
                         OrderResponse orderResponse = orderMapper.toOrderResponse(savedOrder);
 
-                        // Store idempotency mapping with full OrderResponse
-                        idempotencyService.save("orders", "create", request.getIdempotencyKey(), orderResponse);
-
-                        // Publish order created event
+                        // Enqueue order created event in the same DB transaction before caching idempotency
                         OrderCreatedEvent event = OrderCreatedEvent.builder()
                                         .orderId(savedOrder.getId())
                                         .userId(savedOrder.getUser().getId())
@@ -117,6 +114,9 @@ public class OrderService {
                                         .createdAt(savedOrder.getCreatedAt())
                                         .build();
                         orderEventPublisher.publishOrderCreated(event);
+
+                        // Store idempotency mapping with full OrderResponse
+                        idempotencyService.save("orders", "create", request.getIdempotencyKey(), orderResponse);
 
                         long elapsed = System.currentTimeMillis() - startTime;
                         log.info("Order created successfully with orderId: {}, elapsed: {}ms", savedOrder.getId(),

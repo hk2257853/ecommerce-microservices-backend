@@ -159,4 +159,42 @@ Testing results (Phase B — Dead Redis `cut-redis` → `restore-redis` mid-run)
      - **Normal Buyers (10 VUs, unique IPs):** `3,137` `201` (`50.4/s`), **`0` `429`**, **`0` `5xx`** (`p95 = 109.76ms`, well under `200ms` SLO; `159` `409` optimistic-lock conflicts from 10 VUs sharing 30 products).
      - **Double-Click / Retries (28 rounds × [5 concurrent + 1 sequential]):** `56` `201`s (`2` per round, **exact same `orderId`**), `112` `409`s (`4` concurrent losers per round), **`0` duplicate orders**.
      - **Takeaway:** Fixed-window Redis rate limiting isolated the abusive IP completely without affecting normal buyers, and Redis `SETNX` idempotency prevented every double-click/retry from creating duplicate orders.
+5. **Kafka Down (What if the event broker dies mid-traffic?)**
+   - **Test:** Stop Kafka (`docker stop orders-kafka`) mid-load during `traffic-blaster.js`, then bring it back (`docker start orders-kafka`) and check latency, HikariCP pool, and whether `order.created` events were lost.
+   - **Expected (Before Fix vs After Fix):**
+     - *Before fix:* `OrderService.createOrder` calls `kafkaTemplate.send()` inside `@Transactional` with no producer timeout overrides (`max.block.ms` defaults to `60s`), risking silent event loss (async fire-and-forget) or `60s` hangs holding DB connections until HikariCP saturates.
+     - *After fix (timeout + decouple / Transactional Outbox):* `POST /api/orders` stays fast (`201`), HikariCP stays flat, and zero events are lost once Kafka recovers.
+   - **What to expect on Grafana + k6:**
+
+   | Signal | Healthy (Target) | Warning (Degraded) | Bad (Broken / Event Loss) |
+   | --- | --- | --- | --- |
+   | HTTP Status Codes | `201`s keep flowing (`0` `5xx`) | Brief `5xx` spike if fail-fast without outbox | `500`s or client timeouts across all endpoints |
+   | Latency (p95 / p99) | Stays `< 200ms / < 500ms` | Bounded fail-fast (`1–3s`) | Spikes to **60s** (`max.block.ms` default) |
+   | HikariCP Pool | Active low, Pending `0` | Brief bump while metadata times out | `30/30` active stuck waiting on Kafka inside `@Transactional` |
+   | Event Delivery | `100%` of created orders reach `order.created` after recovery | Events delayed until Kafka restarts | Orders saved in Postgres but events **silently dropped** |
+
+   - **Commands:**
+     ```powershell
+     # Terminal 1: Start load
+     k6 run chaos-lab\load-tests\traffic-blaster.js
+
+     # Terminal 2: Once traffic is steady (~15s in), kill Kafka
+     docker stop orders-kafka
+
+     # Terminal 2: After ~20-30s, bring Kafka back and verify recovery / outbox drain
+     docker start orders-kafka
+     ```
+   - **Note — Why `201` when Kafka is down?** Postgres saves the order (`201` = "order accepted"); Kafka just notifies other services later. Without an Outbox, `201` loses events; with an Outbox (save order + event together in Postgres), `201` stays safe and events send once Kafka is back.
+   - **Observed Results (Before vs After Transactional Outbox):**
+
+   | Metric | Before Fix (In-Memory Kafka Producer, ~25s outage) | After Fix (Transactional Outbox, ~2m outage) |
+   | :--- | :--- | :--- |
+   | **Throughput (`traffic-blaster.js`)** | `94.4 req/s` (`11,530` reqs) | `82.1 req/s` (`9,826` iterations / `10,027` reqs) |
+   | **Latency (`p95`)** | `1.51s` | `1.19s` (`avg = 499.29ms`) |
+   | **`POST /api/orders` Statuses** | `5,005` `201`, `5,282` `409`, `1,032` `429`, `10` `503`, `0` `500`s | `4,367` `201`, `4,826` `409`, `817` `429`, `7` `503`, **`0` `500`s** |
+   | **HikariCP Pool** | Stayed healthy | `active = 0`, `pending = 0` after drain |
+   | **During Outage** | Buffered only in app RAM (`buffer.memory` / `120s` delivery window; lost on `>2m` outage or restart) | **`2,440` events** persisted in Postgres `outbox_events` (`2,390` `PENDING`, `50` `PROCESSING`; `32` failed retries, max `8`, capped `30s` backoff) |
+   | **After Recovery (`docker start orders-kafka`)** | `0` expired batches in 25s window (unverified under longer outage/crash) | **`4,367 / 4,367` `SENT` (`100%` delivered, `0` lost, `outbox_events_pending = 0`)** |
+
+   - **Note on DB Pool Queueing (`52` Waiting Threads at Peak):** At `100` VUs, `30` Tomcat threads held the `30` HikariCP connections while `~52` queued (`p95 = 1.19s`, `7` `503`s at `1500ms` timeout). Turned off `spring.jpa.show-sql` (`${SHOW_SQL:false}`) and `hibernate.format_sql` in `orders-service/src/main/resources/application.yml` so console SQL logging stops slowing down DB transactions and inflating pool wait time.
 

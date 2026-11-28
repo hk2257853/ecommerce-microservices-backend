@@ -179,7 +179,7 @@
     },
     {
       "id": 7,
-      "title": "HikariCP Connection Pool (Max: 10)",
+      "title": "HikariCP Connection Pool (Max: 30)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
       "targets": [

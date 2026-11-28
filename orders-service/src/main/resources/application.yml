@@ -16,10 +16,15 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
     producer:
+      acks: all
+      retries: 1
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.trusted.packages: com.hk.common.dto
+        max.block.ms: 1000
+        request.timeout.ms: 1500
+        delivery.timeout.ms: 2000
   
   flyway:
     enabled: true
@@ -37,10 +42,10 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         jdbc:
           lob:
             non_contextual_creation: true
@@ -91,6 +96,16 @@ rate-limit:
   rate-limit-enabled: true
   strategy: fixed-window
 
+# Transactional outbox relay configuration
+outbox:
+  relay:
+    enabled: true
+    poll-interval-ms: 1000
+    batch-size: 50
+    max-retries: 50
+    max-backoff-seconds: 30
+    stale-lock-seconds: 60
+
 ---
 # --- means start of a new doc
 spring:
@@ -127,6 +142,10 @@ spring:
 
 rate-limit:
   rate-limit-enabled: false
+
+outbox:
+  relay:
+    enabled: false
 
 ---
 spring:
