@@ -32,6 +32,7 @@
 - [Distributed Systems](#distributed-systems--sde-2-concepts)
   - [Core Concepts](#distributed-systems--sde-2-concepts)
   - [At Scale Implementation](#distributed-systems--how-our-implementations-change-at-scale)
+- [Multi-Instance Service Architecture](#multi-instance-service-architecture-nginx--multiple-app-nodes)
 
 ---
 
@@ -1350,3 +1351,20 @@ try {
 You already do this in `IdempotencyService` — Redis fails → log → return null → proceed.
 Same pattern applies to Kafka publish failures, cache misses, etc.
 ```
+
+---
+
+## Multi-Instance Service Architecture (Nginx + Multiple App Nodes)
+
+**Core idea:** Putting Nginx in front of 2+ `orders-service` nodes is ~55 lines of config. **The real engineering isn't the load balancer — it's keeping the backend nodes stateless so splitting traffic across them never corrupts shared state.**
+
+### 1. Nginx Edge (Load Balancing & Failover)
+- **Shared state (`zone`) + `least_conn`:** distributes requests evenly across `:8081` & `:8082`; `zone` shares live connection counts and failure counters across all Nginx workers.
+- **Passive health checks (`max_fails=2 fail_timeout=5s`):** after 2 dead socket hits, Nginx marks the crashed node down for `5s` and sends 100% of traffic to the surviving node.
+- **Keep `X-Forwarded-For` (`$proxy_add_x_forwarded_for`):** append instead of overwriting, or every shopper looks like Nginx's single IP and hits `429` rate limits.
+- **Strict `POST` safety:** by default Nginx won't replay a partially-sent `POST` — only requests in flight at the moment of crash get a brief `502`, then traffic routes cleanly to the survivor.
+
+### 2. Why Multi-Node Backends Stay Safe (Zero In-Memory State)
+- **Redis owns shared request state:** rate limiting (Lua script) and idempotency (`SETNX`) live in Redis, so 2 nodes share the same limits and duplicate checks.
+- **Postgres owns concurrency & outbox handoff:** `@Version` prevents double-selling stock across nodes, and `OutboxRelay` uses `SKIP LOCKED` + `reclaimStaleProcessing` (`60s`) so surviving nodes pick up work orphaned by a crashed node.
+- **Production sizing & drains:** `nodes × Hikari max < Postgres max_connections` (e.g., `2 × 30 = 60 < 100`), plus `server.shutdown: graceful` and readiness/liveness probes for rolling restarts.

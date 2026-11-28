@@ -1,5 +1,25 @@
 services:
   # ============================================================================
+  # L7 LOAD BALANCER (Nginx Reverse Proxy -> 2x orders-service)
+  # ============================================================================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: chaos-nginx
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Docker Desktop maps host.docker.internal to both IPv4 and IPv6 in /etc/hosts;
+    # strip the unreachable IPv6 line on startup so Nginx uses IPv4-only upstreams.
+    command:
+      - /bin/sh
+      - -c
+      - "awk '!/:/ || !/host\\.docker\\.internal/' /etc/hosts > /tmp/hosts && cat /tmp/hosts > /etc/hosts && exec nginx -g 'daemon off;'"
+    restart: unless-stopped
+
+  # ============================================================================
   # OBSERVABILITY STACK (Prometheus + Grafana)
   # ============================================================================
   prometheus:

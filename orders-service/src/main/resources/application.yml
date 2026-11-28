@@ -3,6 +3,8 @@ spring:
     name: ordersservice
   profiles:
     active: dev
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 
   cache:
     type: redis   # tells Spring to use Redis (not in-memory/caffeine)
@@ -51,7 +53,8 @@ spring:
             non_contextual_creation: true
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
   tomcat:
     mbeanregistry:
       enabled: true
@@ -79,6 +82,8 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
     prometheus:
       enabled: true
   metrics:
